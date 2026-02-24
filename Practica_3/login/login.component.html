@@ -1,0 +1,24 @@
+<section class="card">
+  <h2>Login</h2>
+
+  <p-inputgroup>
+    <p-inputgroup-addon>
+      <i class="pi pi-envelope"></i>
+    </p-inputgroup-addon>
+    <input pInputText [(ngModel)]="email" placeholder="Correo electrónico" autocomplete="off" />
+  </p-inputgroup>
+
+  <p-password [(ngModel)]="passwordValue" [toggleMask]="true" />
+
+  <small class="hint">Credenciales de prueba: admin@seguridadweb.com / Admin@12345</small>
+
+  <p-button label="Entrar" [disabled]="!canSubmit" (onClick)="onLogin()" />
+
+  <small *ngIf="loginError" class="error-msg">{{ loginError }}</small>
+  <small *ngIf="loginSuccess" class="success-msg">{{ loginSuccess }}</small>
+
+  <div class="links">
+    <p-button label="Volver a landing" severity="secondary" routerLink="/landing" />
+    <p-button label="Crear cuenta" severity="contrast" routerLink="/register" />
+  </div>
+</section>
