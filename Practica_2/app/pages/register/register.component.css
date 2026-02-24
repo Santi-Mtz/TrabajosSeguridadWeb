@@ -1,0 +1,17 @@
+.card {
+  background: var(--p-surface-0);
+  border: 1px solid var(--p-surface-200);
+  border-radius: 12px;
+  padding: 1.2rem;
+  display: grid;
+  gap: 1rem;
+}
+
+h2 {
+  margin: 0;
+}
+
+.links {
+  display: flex;
+  gap: 1rem;
+}

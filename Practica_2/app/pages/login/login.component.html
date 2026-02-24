@@ -1,0 +1,19 @@
+<section class="card">
+  <h2>Login</h2>
+
+  <p-inputgroup>
+    <p-inputgroup-addon>
+      <i class="pi pi-envelope"></i>
+    </p-inputgroup-addon>
+    <input pInputText [(ngModel)]="email" placeholder="Correo electrónico" autocomplete="off" />
+  </p-inputgroup>
+
+  <p-password [(ngModel)]="passwordValue" [toggleMask]="true" />
+
+  <p-button label="Entrar" />
+
+  <div class="links">
+    <p-button label="Volver a landing" severity="secondary" routerLink="/landing" />
+    <p-button label="Crear cuenta" severity="contrast" routerLink="/register" />
+  </div>
+</section>
