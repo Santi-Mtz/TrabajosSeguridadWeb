@@ -1,0 +1,15 @@
+.group-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.group-page h1,
+.total,
+.advances h2 {
+  margin: 0;
+}
+
+.card-single {
+  margin-top: 0.75rem;
+  max-width: 260px;
+}

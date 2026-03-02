@@ -1,0 +1,14 @@
+.user-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.user-page h1,
+.profile-section h2 {
+  margin: 0;
+}
+
+.profile-grid {
+  display: grid;
+  gap: 0.75rem;
+}
