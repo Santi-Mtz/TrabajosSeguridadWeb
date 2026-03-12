@@ -10,7 +10,12 @@
 
   <p-password [(ngModel)]="passwordValue" [toggleMask]="true" />
 
-  <p-button label="Entrar" />
+  <small class="hint">Credenciales de prueba: admin@seguridadweb.com / Admin@12345</small>
+
+  <p-button label="Entrar" [disabled]="!canSubmit" (onClick)="onLogin()" />
+
+  <small *ngIf="loginError" class="error-msg">{{ loginError }}</small>
+  <small *ngIf="loginSuccess" class="success-msg">{{ loginSuccess }}</small>
 
   <div class="links">
     <p-button label="Volver a landing" severity="secondary" routerLink="/landing" />

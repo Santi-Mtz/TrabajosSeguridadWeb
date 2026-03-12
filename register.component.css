@@ -15,3 +15,11 @@ h2 {
   display: flex;
   gap: 1rem;
 }
+
+.error-msg {
+  color: var(--p-red-500);
+}
+
+.success-msg {
+  color: var(--p-green-500);
+}

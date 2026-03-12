@@ -3,10 +3,27 @@
 
   <p-inputgroup>
     <p-inputgroup-addon>
+      <i class="pi pi-id-card"></i>
+    </p-inputgroup-addon>
+    <input pInputText [(ngModel)]="username" placeholder="Usuario" autocomplete="off" />
+  </p-inputgroup>
+  <small *ngIf="submitAttempted && !username.trim()" class="error-msg">El usuario es obligatorio.</small>
+
+  <p-inputgroup>
+    <p-inputgroup-addon>
       <i class="pi pi-user"></i>
     </p-inputgroup-addon>
     <input pInputText [(ngModel)]="fullName" placeholder="Nombre completo" autocomplete="off" />
   </p-inputgroup>
+  <small *ngIf="submitAttempted && !fullName.trim()" class="error-msg">El nombre completo es obligatorio.</small>
+
+  <p-inputgroup>
+    <p-inputgroup-addon>
+      <i class="pi pi-map-marker"></i>
+    </p-inputgroup-addon>
+    <input pInputText [(ngModel)]="address" placeholder="Dirección" autocomplete="off" />
+  </p-inputgroup>
+  <small *ngIf="submitAttempted && !address.trim()" class="error-msg">La dirección es obligatoria.</small>
 
   <p-inputgroup>
     <p-inputgroup-addon>
@@ -14,10 +31,40 @@
     </p-inputgroup-addon>
     <input pInputText [(ngModel)]="email" placeholder="Correo electrónico" autocomplete="off" />
   </p-inputgroup>
+  <small *ngIf="submitAttempted && !email.trim()" class="error-msg">El correo es obligatorio.</small>
+  <small *ngIf="submitAttempted && email.trim() && !hasValidEmail" class="error-msg">Ingresa un correo válido.</small>
+
+  <p-inputgroup>
+    <p-inputgroup-addon>
+      <i class="pi pi-phone"></i>
+    </p-inputgroup-addon>
+    <input pInputText [(ngModel)]="phone" placeholder="Teléfono (solo números)" autocomplete="off" />
+  </p-inputgroup>
+  <small *ngIf="submitAttempted && !phone.trim()" class="error-msg">El teléfono es obligatorio.</small>
+  <small *ngIf="submitAttempted && phone.trim() && !hasValidPhone" class="error-msg">El teléfono debe tener solo números (7 a 15 dígitos).</small>
+
+  <p-inputgroup>
+    <p-inputgroup-addon>
+      <i class="pi pi-calendar"></i>
+    </p-inputgroup-addon>
+    <input pInputText type="date" [(ngModel)]="birthDate" />
+  </p-inputgroup>
+  <small *ngIf="submitAttempted && !birthDate" class="error-msg">La fecha de nacimiento es obligatoria.</small>
+  <small *ngIf="submitAttempted && birthDate && !isAdult" class="error-msg">Solo se permite registro para mayores de edad.</small>
 
   <p-password [(ngModel)]="password" [toggleMask]="true" />
+  <small *ngIf="submitAttempted && !password.trim()" class="error-msg">La contraseña es obligatoria.</small>
+  <small *ngIf="submitAttempted && password.trim() && !hasStrongPassword" class="error-msg">La contraseña debe tener mínimo 10 caracteres y al menos un símbolo especial ({{ specialSymbolDescription }}).</small>
 
-  <p-button label="Crear cuenta" />
+  <p-password [(ngModel)]="confirmPassword" [toggleMask]="true" />
+  <small *ngIf="submitAttempted && !confirmPassword.trim()" class="error-msg">La confirmación de contraseña es obligatoria.</small>
+  <small *ngIf="submitAttempted && confirmPassword.trim() && !passwordsMatch" class="error-msg">Las contraseñas no coinciden.</small>
+
+  <p-button label="Crear cuenta" (onClick)="onRegister()" />
+
+  <small *ngIf="submitAttempted && !isFormValid" class="error-msg">Completa correctamente todos los campos para registrarte.</small>
+
+  <small *ngIf="successMessage" class="success-msg">{{ successMessage }}</small>
 
   <div class="links">
     <p-button label="Volver a landing" severity="secondary" routerLink="/landing" />
