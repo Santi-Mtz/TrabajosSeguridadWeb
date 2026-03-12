@@ -4,13 +4,69 @@
 	background: var(--p-surface-100);
 }
 
-.shell {
-	max-width: 1100px;
-	margin: 0 auto;
-	padding: 2rem 1rem;
-	display: grid;
+.dashboard {
+	min-height: 100dvh;
+	position: relative;
 }
 
-.view {
+.plain-view {
+	min-height: 100dvh;
+}
+
+
+.topbar {
+	position: absolute;
+	top: 1rem;
+	left: 1rem;
+	display: flex;
+	align-items: center;
+	z-index: 2;
+}
+
+.menu-wrap {
+	position: relative;
+}
+
+.menu-panel {
+	position: absolute;
+	top: calc(100% + 0.5rem);
+	left: 0;
+	z-index: 50;
+	background: var(--p-surface-0);
+	border: 1px solid var(--p-surface-200);
+	border-radius: 0.5rem;
+	padding: 0.5rem;
+	min-width: 11rem;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.menu-actions {
 	display: grid;
+	gap: 0.25rem;
+}
+
+:host ::ng-deep .menu-actions .p-button {
+	justify-content: flex-start;
+	width: 100%;
+}
+
+.version {
+	position: absolute;
+	left: 1rem;
+	bottom: 1rem;
+	margin: 0;
+	color: var(--p-text-muted-color);
+	font-size: 0.875rem;
+}
+
+.content {
+	padding: 2rem;
+	display: grid;
+	min-height: 100dvh;
+}
+
+.content--full {
+	max-width: 1100px;
+	margin: 0 auto;
+	width: 100%;
 }

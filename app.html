@@ -1,7 +1,31 @@
+@if (showSidebar) {
+  <main class="dashboard">
+    <header class="topbar">
+      <div class="menu-wrap">
+        <p-button icon="pi pi-bars" ariaLabel="Menu" (onClick)="toggleMenu()" />
+        @if (menuOpen) {
+          <div class="menu-panel">
+            <div class="menu-actions">
+              <p-button label="Dashboard" icon="pi pi-home" [text]="true" (onClick)="navigateTo('/dashboard')" />
+              <p-button label="Group" icon="pi pi-users" [text]="true" (onClick)="navigateTo('/group')" />
+              <p-button label="User" icon="pi pi-user" [text]="true" (onClick)="navigateTo('/user')" />
+            </div>
+          </div>
+        }
+      </div>
+    </header>
 
-<main class="shell">
-  <section class="view">
-    <router-outlet />
-  </section>
-</main>
+    <p class="version">{{ appVersion }}</p>
+
+    <section class="content">
+      <router-outlet />
+    </section>
+  </main>
+} @else {
+  <main class="plain-view">
+    <section class="content content--full">
+      <router-outlet />
+    </section>
+  </main>
+}
 
