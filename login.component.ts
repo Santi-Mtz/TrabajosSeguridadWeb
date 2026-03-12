@@ -1,12 +1,13 @@
 import { Component } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { ButtonModule } from 'primeng/button';
 import { InputGroupModule } from 'primeng/inputgroup';
 import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
+import { CardModule } from 'primeng/card';
 
 @Component({
   selector: 'app-login',
@@ -19,12 +20,15 @@ import { PasswordModule } from 'primeng/password';
     InputGroupAddonModule,
     InputTextModule,
     PasswordModule,
-    ButtonModule
+    ButtonModule,
+    CardModule
   ],
   templateUrl: './login.component.html',
   styleUrl: './login.component.css'
 })
 export class LoginComponent {
+  constructor(private readonly router: Router) {}
+
   email = '';
   passwordValue = '';
 
@@ -52,6 +56,7 @@ export class LoginComponent {
       password === this.validCredential.password
     ) {
       this.loginSuccess = 'Credenciales válidas. Inicio de sesión correcto.';
+      void this.router.navigate(['/dashboard']);
       return;
     }
 

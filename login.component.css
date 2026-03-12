@@ -1,19 +1,60 @@
+:host {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+}
+
 .card {
   background: var(--p-surface-0);
   border: 1px solid var(--p-surface-200);
   border-radius: 12px;
-  padding: 1.2rem;
+}
+
+.login-title,
+.login-subtitle {
+  text-align: center;
+}
+
+.content-wrap {
+  max-width: 560px;
+  margin: 0 auto;
+  width: 100%;
   display: grid;
   gap: 1rem;
+}
+
+:host ::ng-deep .password-field {
+  width: 100%;
+}
+
+:host ::ng-deep .password-field .p-password-input {
+  width: 100%;
 }
 
 h2 {
   margin: 0;
 }
 
-.links {
+.actions {
   display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 1rem;
+}
+
+.submit-action {
+  display: flex;
+  justify-content: center;
+}
+
+.secondary-actions {
+  margin-top: 0.25rem;
+}
+
+:host ::ng-deep .submit-action .p-button,
+:host ::ng-deep .secondary-actions .p-button {
+  min-width: 11rem;
 }
 
 .hint {
