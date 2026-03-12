@@ -7,6 +7,7 @@ import { InputGroupModule } from 'primeng/inputgroup';
 import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
+import { CardModule } from 'primeng/card';
 
 @Component({
   selector: 'app-register',
@@ -19,7 +20,8 @@ import { PasswordModule } from 'primeng/password';
     InputGroupAddonModule,
     InputTextModule,
     PasswordModule,
-    ButtonModule
+    ButtonModule,
+    CardModule
   ],
   templateUrl: './register.component.html',
   styleUrl: './register.component.css'
