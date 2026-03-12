@@ -1,1 +1,16 @@
-@import "primeicons/primeicons.css";
+:host {
+	display: block;
+	min-height: 100dvh;
+	background: var(--p-surface-100);
+}
+
+.shell {
+	max-width: 1100px;
+	margin: 0 auto;
+	padding: 2rem 1rem;
+	display: grid;
+}
+
+.view {
+	display: grid;
+}
