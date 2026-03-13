@@ -1,0 +1,33 @@
+.content-wrap {
+  display: grid;
+  gap: 1rem;
+}
+
+.actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.submit-action {
+  display: flex;
+  justify-content: center;
+}
+
+.secondary-actions {
+  margin-top: 0.25rem;
+}
+
+.hint {
+  color: var(--p-text-muted-color);
+}
+
+.error-msg {
+  color: var(--p-red-500);
+}
+
+.success-msg {
+  color: var(--p-green-500);
+}
+

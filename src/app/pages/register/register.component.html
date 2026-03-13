@@ -1,0 +1,130 @@
+<app-auth-shell title="Register" subtitle="Inicio de registro" heroAltText="Registro" cardWidth="56rem" contentWidth="920px" heroHeight="210px">
+  <article auth-body class="content-wrap">
+    <article class="form-grid">
+      <article class="field-block">
+        <p-inputgroup>
+          <p-inputgroup-addon>
+            <i class="pi pi-id-card"></i>
+          </p-inputgroup-addon>
+          <input pInputText [(ngModel)]="username" [ngModelOptions]="{standalone: true}" placeholder="Usuario" autocomplete="off" />
+        </p-inputgroup>
+        @if (submitAttempted && !username.trim()) {
+          <p-message severity="error" text="El usuario es obligatorio." />
+        }
+      </article>
+
+      <article class="field-block">
+        <p-inputgroup>
+          <p-inputgroup-addon>
+            <i class="pi pi-user"></i>
+          </p-inputgroup-addon>
+          <input pInputText [(ngModel)]="fullName" [ngModelOptions]="{standalone: true}" placeholder="Nombre completo" autocomplete="off" />
+        </p-inputgroup>
+        @if (submitAttempted && !fullName.trim()) {
+          <p-message severity="error" text="El nombre completo es obligatorio." />
+        }
+      </article>
+
+      <article class="field-block">
+        <p-inputgroup>
+          <p-inputgroup-addon>
+            <i class="pi pi-map-marker"></i>
+          </p-inputgroup-addon>
+          <input pInputText [(ngModel)]="address" [ngModelOptions]="{standalone: true}" placeholder="Dirección" autocomplete="off" />
+        </p-inputgroup>
+        @if (submitAttempted && !address.trim()) {
+          <p-message severity="error" text="La dirección es obligatoria." />
+        }
+      </article>
+
+      <article class="field-block">
+        <p-inputgroup>
+          <p-inputgroup-addon>
+            <i class="pi pi-envelope"></i>
+          </p-inputgroup-addon>
+          <input pInputText [(ngModel)]="email" [ngModelOptions]="{standalone: true}" placeholder="Correo electrónico" autocomplete="off" />
+        </p-inputgroup>
+        @if (submitAttempted && !email.trim()) {
+          <p-message severity="error" text="El correo es obligatorio." />
+        }
+        @if (submitAttempted && email.trim() && !hasValidEmail) {
+          <p-message severity="error" text="Ingresa un correo válido." />
+        }
+      </article>
+
+      <article class="field-block">
+        <p-inputgroup>
+          <p-inputgroup-addon>
+            <i class="pi pi-phone"></i>
+          </p-inputgroup-addon>
+          <input pInputText [(ngModel)]="phone" [ngModelOptions]="{standalone: true}" placeholder="Teléfono (solo números)" autocomplete="off" />
+        </p-inputgroup>
+        @if (submitAttempted && !phone.trim()) {
+          <p-message severity="error" text="El teléfono es obligatorio." />
+        }
+        @if (submitAttempted && phone.trim() && !hasValidPhone) {
+          <p-message severity="error" text="El teléfono debe tener solo números (7 a 15 dígitos)." />
+        }
+      </article>
+
+      <article class="field-block">
+        <p-inputgroup>
+          <p-inputgroup-addon>
+            <i class="pi pi-calendar"></i>
+          </p-inputgroup-addon>
+          <p-datepicker
+            [(ngModel)]="birthDate"
+            [ngModelOptions]="{standalone: true}"
+            dateFormat="yy-mm-dd"
+            [showIcon]="true"
+            styleClass="w-full"
+            placeholder="Fecha de nacimiento"
+          />
+        </p-inputgroup>
+        @if (submitAttempted && !birthDateValue) {
+          <p-message severity="error" text="La fecha de nacimiento es obligatoria." />
+        }
+        @if (submitAttempted && birthDateValue && !isAdult) {
+          <p-message severity="error" text="Solo se permite registro para mayores de edad." />
+        }
+      </article>
+
+      <article class="field-block">
+        <p-password styleClass="password-field" [(ngModel)]="password" [ngModelOptions]="{standalone: true}" [toggleMask]="true" />
+        @if (submitAttempted && !password.trim()) {
+          <p-message severity="error" text="La contraseña es obligatoria." />
+        }
+        @if (submitAttempted && password.trim() && !hasStrongPassword) {
+          <p-message severity="error" [text]="'La contraseña debe tener mínimo 10 caracteres y al menos un símbolo especial (' + specialSymbolDescription + ').'" />
+        }
+      </article>
+
+      <article class="field-block">
+        <p-password styleClass="password-field" [(ngModel)]="confirmPassword" [ngModelOptions]="{standalone: true}" [toggleMask]="true" />
+        @if (submitAttempted && !confirmPassword.trim()) {
+          <p-message severity="error" text="La confirmación de contraseña es obligatoria." />
+        }
+        @if (submitAttempted && confirmPassword.trim() && !passwordsMatch) {
+          <p-message severity="error" text="Las contraseñas no coinciden." />
+        }
+      </article>
+    </article>
+
+    <footer class="submit-action">
+      <p-button label="Crear cuenta" (onClick)="onRegister()" />
+    </footer>
+
+    @if (submitAttempted && !isFormValid) {
+      <p-message severity="error" text="Completa correctamente todos los campos para registrarte." />
+    }
+
+    @if (successMessage) {
+      <p-message severity="success" [text]="successMessage" />
+    }
+  </article>
+
+  <article auth-footer class="links secondary-actions">
+    <p-button label="Volver a landing" severity="secondary" routerLink="/landing" />
+    <p-button label="Ya tengo cuenta" severity="contrast" routerLink="/login" />
+  </article>
+</app-auth-shell>

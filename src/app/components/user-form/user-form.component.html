@@ -1,0 +1,47 @@
+<article class="user-form-grid">
+  <div class="user-form-field">
+    <span class="user-form-label">Usuario</span>
+    <input pInputText [(ngModel)]="model.username" [ngModelOptions]="{ standalone: true }" placeholder="Usuario" />
+  </div>
+
+  <div class="user-form-field">
+    <span class="user-form-label">Nombre completo</span>
+    <input pInputText [(ngModel)]="model.fullName" [ngModelOptions]="{ standalone: true }" placeholder="Nombre completo" />
+  </div>
+
+  <div class="user-form-field user-form-field-full">
+    <span class="user-form-label">Dirección</span>
+    <input pInputText [(ngModel)]="model.address" [ngModelOptions]="{ standalone: true }" placeholder="Dirección" />
+  </div>
+
+  <div class="user-form-field">
+    <span class="user-form-label">Teléfono</span>
+    <input pInputText [(ngModel)]="model.phone" [ngModelOptions]="{ standalone: true }" placeholder="Teléfono" />
+  </div>
+
+  <div class="user-form-field">
+    <span class="user-form-label">Fecha de nacimiento</span>
+    <p-datepicker
+      [(ngModel)]="model.birthDate"
+      [ngModelOptions]="{ standalone: true }"
+      dateFormat="yy-mm-dd"
+      [inputId]="birthDateInputId"
+      styleClass="w-full"
+    />
+  </div>
+
+  <div class="user-form-field">
+    <span class="user-form-label">Correo</span>
+    <input pInputText [(ngModel)]="model.email" [ngModelOptions]="{ standalone: true }" placeholder="Correo" />
+  </div>
+
+  <div class="user-form-field">
+    <span class="user-form-label">Permisos</span>
+    <input pInputText [(ngModel)]="model.role" [ngModelOptions]="{ standalone: true }" placeholder="Permisos" />
+  </div>
+
+  <div class="user-form-field user-form-field-full">
+    <span class="user-form-label">Equipo</span>
+    <input pInputText [(ngModel)]="model.team" [ngModelOptions]="{ standalone: true }" placeholder="Equipo" />
+  </div>
+</article>

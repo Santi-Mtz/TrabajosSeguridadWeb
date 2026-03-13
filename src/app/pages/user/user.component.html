@@ -1,0 +1,191 @@
+<article class="user-page">
+  @if (notification) {
+    <p-message [severity]="notification.severity" [text]="notification.text" />
+  }
+
+  @if (!canManageUsers) {
+    <p-message severity="warn" text="La gestión avanzada requiere permisos user:create, user:edit y user:delete." />
+  }
+
+  <article class="profile-layout">
+    <p-card header="Perfil de usuario" subheader="Datos personales y de registro del usuario autenticado">
+      <app-user-form [model]="profileForm" birthDateInputId="birthDate" />
+
+      <footer class="actions-row">
+        <p-button label="Guardar perfil" (onClick)="saveProfile()" />
+        <p-button label="Restablecer" severity="secondary" (onClick)="resetProfile()" />
+        @if (isSuperAdmin) {
+          <p-tag value="superAdmin" severity="contrast" />
+        }
+      </footer>
+    </p-card>
+
+    <section class="summary-grid">
+      <p-card header="Abiertos" subheader="Pendientes asignados" styleClass="summary-card">
+        <div class="summary-value">{{ openTicketsCount }}</div>
+      </p-card>
+      <p-card header="En progreso" subheader="Trabajo activo" styleClass="summary-card">
+        <div class="summary-value">{{ inProgressTicketsCount }}</div>
+      </p-card>
+      <p-card header="Hechos" subheader="Tickets completados" styleClass="summary-card">
+        <div class="summary-value">{{ doneTicketsCount }}</div>
+      </p-card>
+      <p-card header="Bloqueados" subheader="Tickets detenidos" styleClass="summary-card">
+        <div class="summary-value">{{ blockedTicketsCount }}</div>
+      </p-card>
+    </section>
+  </article>
+
+  <p-card header="Tickets asignados" subheader="Carga de trabajo individual del usuario actual">
+    <p-table [value]="assignedTickets" styleClass="p-datatable-sm">
+      <ng-template pTemplate="header">
+        <tr>
+          <th scope="col">ID / Título</th>
+          <th scope="col">Estado</th>
+          <th scope="col">Prioridad</th>
+          <th scope="col">F. creación</th>
+          <th scope="col">F. límite</th>
+        </tr>
+      </ng-template>
+
+      <ng-template pTemplate="body" let-ticket>
+        <tr>
+          <td>
+            <strong>#{{ ticket.id }}</strong>
+            <br />
+            <span>{{ ticket.title }}</span>
+          </td>
+          <td>
+            <p-tag [value]="ticket.status" [severity]="statusSeverity(ticket.status)" />
+          </td>
+          <td>
+            <p-tag [value]="ticket.priority" [severity]="prioritySeverity(ticket.priority)" />
+          </td>
+          <td>{{ ticket.createdAt }}</td>
+          <td>{{ ticket.dueDate }}</td>
+        </tr>
+      </ng-template>
+
+      <ng-template pTemplate="emptymessage">
+        <tr>
+          <td colspan="5">No hay tickets asignados a este usuario.</td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </p-card>
+
+  @if (showAdminSection) {
+    <article class="admin-layout">
+      <p-card header="CRUD de usuarios" subheader="Crear, editar y eliminar usuarios del sistema">
+        <app-user-form [model]="userCrudForm" />
+
+        <footer class="actions-row">
+          <p-button
+            [label]="editingUserId !== null ? 'Actualizar usuario' : 'Crear usuario'"
+            (onClick)="saveUserCrud()"
+            [disabled]="(editingUserId === null && !canCreateUsers) || (editingUserId !== null && !canEditUsers)"
+          />
+          <p-button label="Limpiar" severity="secondary" (onClick)="resetUserCrudForm()" />
+        </footer>
+      </p-card>
+
+      <p-card header="Gestión de permisos" subheader="Agregar o eliminar permisos por usuario">
+        <div class="field-block">
+          <span class="field-label">Usuario objetivo</span>
+          <p-select
+            [options]="userOptions"
+            optionLabel="label"
+            optionValue="value"
+            [(ngModel)]="selectedPermissionUserId"
+            [ngModelOptions]="{standalone: true}"
+            placeholder="Selecciona un usuario"
+            styleClass="w-full"
+          />
+        </div>
+
+        @if (selectedPermissionUser) {
+          <p><strong>Usuario:</strong> {{ selectedPermissionUser.username }} ({{ selectedPermissionUser.email }})</p>
+          <p class="permission-summary">
+            {{ selectedPermissionUserPermissions.length }} de {{ allPermissions.length }} permisos activos
+          </p>
+
+          <div class="permission-actions">
+            <p-button label="Agregar todos" severity="secondary" (onClick)="addAllPermissionsToSelected()" [disabled]="!canManagePermissions" />
+            <p-button
+              label="Quitar todos"
+              severity="danger"
+              (onClick)="removeAllPermissionsFromSelected()"
+              [disabled]="selectedPermissionUser.username === 'superAdmin' || !canManagePermissions"
+            />
+          </div>
+
+          <p-table [value]="allPermissions" styleClass="p-datatable-sm permissions-table">
+            <ng-template pTemplate="header">
+              <tr>
+                <th scope="col">Permiso</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Acción</th>
+              </tr>
+            </ng-template>
+
+            <ng-template pTemplate="body" let-permission>
+              <tr>
+                <td>{{ permission }}</td>
+                <td>
+                  <p-tag [value]="hasPermission(permission) ? 'Activo' : 'Inactivo'" [severity]="hasPermission(permission) ? 'success' : 'secondary'" />
+                </td>
+                <td>
+                  <p-button
+                    [label]="hasPermission(permission) ? 'Quitar' : 'Agregar'"
+                    [severity]="hasPermission(permission) ? 'danger' : 'secondary'"
+                    size="small"
+                    [outlined]="!hasPermission(permission)"
+                    (onClick)="togglePermission(permission)"
+                    [disabled]="!canManagePermissions || selectedPermissionUser.username === 'superAdmin'"
+                  />
+                </td>
+              </tr>
+            </ng-template>
+          </p-table>
+        }
+      </p-card>
+    </article>
+
+    <p-card header="Usuarios del sistema" subheader="Listado completo con acciones CRUD">
+      <p-table [value]="users" styleClass="p-datatable-sm">
+        <ng-template pTemplate="header">
+          <tr>
+            <th scope="col">ID</th>
+            <th scope="col">Usuario</th>
+            <th scope="col">Nombre</th>
+            <th scope="col">Correo</th>
+            <th scope="col">Permisos</th>
+            <th scope="col">Equipo</th>
+            <th scope="col">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template pTemplate="body" let-user>
+          <tr>
+            <td>{{ user.id }}</td>
+            <td>{{ user.username }}</td>
+            <td>{{ user.fullName }}</td>
+            <td>{{ user.email }}</td>
+            <td>{{ user.role }}</td>
+            <td>{{ user.team }}</td>
+            <td>
+              <p-button label="Editar" size="small" severity="secondary" (onClick)="editUserRecord(user)" />
+              <p-button
+                label="Eliminar"
+                size="small"
+                severity="danger"
+                (onClick)="deleteUserRecord(user)"
+                [disabled]="user.username === 'superAdmin' || !canDeleteUsers"
+              />
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </p-card>
+  }
+</article>
