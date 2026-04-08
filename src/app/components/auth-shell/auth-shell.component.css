@@ -1,0 +1,71 @@
+:host {
+  display: block;
+}
+
+.auth-page {
+  width: 100%;
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.auth-card {
+  width: min(var(--auth-card-width, 42rem), 100%);
+  background: var(--p-surface-0);
+  border: 1px solid var(--p-surface-200);
+  border-radius: 12px;
+}
+
+.auth-hero-image {
+  width: 100%;
+  height: var(--auth-hero-height, 220px);
+  object-fit: cover;
+}
+
+.auth-title,
+.auth-subtitle {
+  margin: 0;
+  text-align: center;
+}
+
+.auth-content {
+  max-width: var(--auth-content-width, 560px);
+  margin: 0 auto;
+  width: 100%;
+  display: grid;
+  gap: 1rem;
+}
+
+.auth-footer {
+  display: flex;
+  justify-content: center;
+}
+
+:host ::ng-deep .password-field {
+  width: 100%;
+}
+
+:host ::ng-deep .password-field .p-password-input {
+  width: 100%;
+}
+
+:host ::ng-deep .submit-action .p-button,
+:host ::ng-deep .secondary-actions .p-button,
+:host ::ng-deep .auth-footer .p-button {
+  min-width: 11rem;
+}
+
+@media (max-width: 900px) {
+  :host ::ng-deep .submit-action .p-button,
+  :host ::ng-deep .secondary-actions .p-button,
+  :host ::ng-deep .auth-footer .p-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .auth-hero-image {
+    height: 190px;
+  }
+}

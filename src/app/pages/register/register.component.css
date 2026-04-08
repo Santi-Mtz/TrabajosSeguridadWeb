@@ -1,0 +1,46 @@
+.content-wrap {
+  display: grid;
+  gap: 1rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem 1rem;
+}
+
+.field-block {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+}
+
+.links {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.submit-action {
+  display: flex;
+  justify-content: center;
+}
+
+.secondary-actions {
+  margin-top: 0.25rem;
+}
+
+.error-msg {
+  color: var(--p-red-500);
+}
+
+.success-msg {
+  color: var(--p-green-500);
+}
+
+@media (max-width: 900px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}

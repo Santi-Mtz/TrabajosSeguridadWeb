@@ -1,0 +1,115 @@
+@if (showSidebar) {
+  <main class="dashboard" [class.sidebar-collapsed]="!menuOpen">
+    <aside class="sidebar sidebar-desktop" aria-label="Navegación principal">
+      <p-button
+        icon="pi pi-bars"
+        [text]="true"
+        ariaLabel="Expandir o colapsar menú"
+        (onClick)="toggleMenu()"
+      />
+
+      <nav class="sidebar-nav" aria-label="Secciones">
+        <p-button
+          label="Dashboard"
+          icon="pi pi-home"
+          [text]="!isActive('/dashboard')"
+          [severity]="isActive('/dashboard') ? 'contrast' : undefined"
+          [rounded]="true"
+          (onClick)="navigateTo('/dashboard')"
+        />
+
+        @if (canOpenGroup) {
+          <p-button
+            label="Group"
+            icon="pi pi-users"
+            [text]="!isActive('/group')"
+            [severity]="isActive('/group') ? 'contrast' : undefined"
+            [rounded]="true"
+            (onClick)="navigateTo('/group')"
+          />
+        }
+
+        <p-button
+          label="User"
+          icon="pi pi-user"
+          [text]="!isActive('/user')"
+          [severity]="isActive('/user') ? 'contrast' : undefined"
+          [rounded]="true"
+          (onClick)="navigateTo('/user')"
+        />
+
+        <p-button
+          label="Cerrar sesión"
+          icon="pi pi-sign-out"
+          severity="secondary"
+          [rounded]="true"
+          (onClick)="logout()"
+        />
+      </nav>
+
+      <p class="version">v{{ appVersion }}</p>
+    </aside>
+
+    <header class="mobile-topbar">
+      <p-button icon="pi pi-bars" [rounded]="true" ariaLabel="Abrir menú" (onClick)="toggleMobileMenu()" />
+      <p class="mobile-title">{{ projectName }} · v{{ appVersion }}</p>
+    </header>
+
+    <section class="content">
+      <router-outlet />
+    </section>
+  </main>
+
+  <p-drawer
+    [(visible)]="mobileMenuOpen"
+    position="left"
+    [modal]="true"
+    [dismissible]="true"
+    styleClass="mobile-drawer"
+    header="Navegación"
+  >
+    <p-button
+      label="Dashboard"
+      icon="pi pi-home"
+      [text]="!isActive('/dashboard')"
+      [severity]="isActive('/dashboard') ? 'contrast' : undefined"
+      [rounded]="true"
+      (onClick)="navigateTo('/dashboard')"
+    />
+
+    @if (canOpenGroup) {
+      <p-button
+        label="Group"
+        icon="pi pi-users"
+        [text]="!isActive('/group')"
+        [severity]="isActive('/group') ? 'contrast' : undefined"
+        [rounded]="true"
+        (onClick)="navigateTo('/group')"
+      />
+    }
+
+    <p-button
+      label="User"
+      icon="pi pi-user"
+      [text]="!isActive('/user')"
+      [severity]="isActive('/user') ? 'contrast' : undefined"
+      [rounded]="true"
+      (onClick)="navigateTo('/user')"
+    />
+
+    <p-button
+      label="Cerrar sesión"
+      icon="pi pi-sign-out"
+      severity="secondary"
+      [rounded]="true"
+      (onClick)="logout()"
+    />
+  </p-drawer>
+} @else {
+  <main class="plain-view">
+    <section class="content content--full">
+      <router-outlet />
+    </section>
+  </main>
+}
+

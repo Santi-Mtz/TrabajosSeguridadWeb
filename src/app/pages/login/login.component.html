@@ -1,0 +1,29 @@
+<app-auth-shell title="Login" subtitle="Inicio de sesión" heroAltText="Login" cardWidth="42rem" contentWidth="560px" heroHeight="250px">
+  <article auth-body class="content-wrap">
+    <p-inputgroup>
+      <p-inputgroup-addon>
+        <i class="pi pi-envelope"></i>
+      </p-inputgroup-addon>
+      <input pInputText [(ngModel)]="email" [ngModelOptions]="{standalone: true}" placeholder="Correo electrónico" autocomplete="off" />
+    </p-inputgroup>
+
+    <p-password styleClass="password-field" [(ngModel)]="passwordValue" [toggleMask]="true" />
+
+    <footer class="submit-action">
+      <p-button label="Entrar" [disabled]="!canSubmit" (onClick)="onLogin()" />
+    </footer>
+
+    @if (loginError) {
+      <p-message severity="error" [text]="loginError" />
+    }
+
+    @if (loginSuccess) {
+      <p-message severity="success" [text]="loginSuccess" />
+    }
+  </article>
+
+  <article auth-footer class="actions secondary-actions">
+    <p-button label="Volver a landing" severity="secondary" routerLink="/landing" />
+    <p-button label="Crear cuenta" severity="contrast" routerLink="/register" />
+  </article>
+</app-auth-shell>

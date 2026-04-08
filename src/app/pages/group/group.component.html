@@ -1,0 +1,643 @@
+<p-card header="Vista Grupo" subheader="Visualización y gestión de tickets por grupo" styleClass="group-card">
+  <div class="group-top-row">
+    <p-select
+      [options]="groupSelectOptions"
+      optionLabel="label"
+      optionValue="value"
+      [(ngModel)]="selectedGroupId"
+      [ngModelOptions]="{standalone: true}"
+      placeholder="Selecciona un grupo"
+      styleClass="w-full group-select"
+      (onChange)="onGroupChange()"
+    />
+
+    <p-selectbutton
+      [options]="viewModeOptions"
+      optionLabel="label"
+      optionValue="value"
+      [(ngModel)]="viewMode"
+      [ngModelOptions]="{standalone: true}"
+      ariaLabel="Modo de visualización"
+    />
+
+    <div class="top-row-spacer"></div>
+
+    <p-button label="Perfil usuario" icon="pi pi-user" severity="secondary" (onClick)="openUserProfile()" />
+    @if (canOpenUserManagement) {
+      <p-button label="Gestión de usuarios" icon="pi pi-users" severity="secondary" (onClick)="openUserManagement()" />
+    }
+  </div>
+
+  <div class="group-overview-row">
+    <div class="group-overview-info">
+      <span class="group-active-name">Grupo activo: <strong>{{ selectedGroupName }}</strong></span>
+      <span class="group-total">{{ total }} ticket{{ total !== 1 ? 's' : '' }} visibles</span>
+    </div>
+    <div class="status-bar">
+      @for (stat of statusSummaryForGroup; track stat.status) {
+        <div class="status-stat">
+          <p-tag [value]="stat.status" [severity]="statusSeverity(stat.status)" />
+          <span class="stat-count">{{ stat.total }}</span>
+        </div>
+      }
+    </div>
+  </div>
+
+  <div class="top-actions-row">
+    @if (canCreateTickets) {
+      <p-button label="Crear ticket" icon="pi pi-plus" (onClick)="openCreateDialog()" />
+    }
+    @if (canCreateGroup) {
+      <p-button
+        [label]="showCreateGroupForm ? 'Cancelar grupo' : 'Nuevo grupo'"
+        icon="pi pi-folder-plus"
+        severity="secondary"
+        (onClick)="toggleCreateGroupForm()"
+      />
+    }
+  </div>
+
+  @if (canCreateGroup && showCreateGroupForm) {
+    <div class="group-create-row">
+      <input pInputText [(ngModel)]="newGroupName" [ngModelOptions]="{standalone: true}" placeholder="Nombre del nuevo grupo" />
+      <p-button label="Crear grupo" icon="pi pi-check" (onClick)="createGroup()" [disabled]="newGroupName.trim().length === 0" />
+    </div>
+  }
+</p-card>
+
+@if (notification) {
+  <p-message [severity]="notification.severity" [text]="notification.text" />
+}
+
+<p-card header="Tickets recientes" subheader="Últimos 5 tickets creados en este grupo" styleClass="group-card">
+  <p-table [value]="recentTickets" styleClass="p-datatable-sm">
+    <ng-template pTemplate="header">
+      <tr>
+        <th scope="col">Título</th>
+        <th scope="col">Estado</th>
+        <th scope="col">Prioridad</th>
+        <th scope="col">Asignado</th>
+        <th scope="col">F. creación</th>
+        <th scope="col">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="body" let-ticket>
+      <tr>
+        <td>{{ ticket.title }}</td>
+        <td><p-tag [value]="ticket.status" [severity]="statusSeverity(ticket.status)" /></td>
+        <td><p-tag [value]="ticket.priority" [severity]="prioritySeverity(ticket.priority)" /></td>
+        <td>{{ ticket.assignedTo }}</td>
+        <td>{{ ticket.createdAt }}</td>
+        <td>
+          <p-button label="Detalle" size="small" severity="secondary" (onClick)="openTicketDetail(ticket)" />
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="emptymessage">
+      <tr>
+        <td colspan="6">No hay tickets en este grupo aún.</td>
+      </tr>
+    </ng-template>
+  </p-table>
+</p-card>
+
+<p-card header="Gestión de grupo" subheader="Usuarios, permisos y configuración básica del espacio de trabajo" styleClass="group-card">
+  <div class="group-config-grid">
+    <div class="config-field">
+      <span class="config-label">Nombre del grupo</span>
+      <input pInputText [(ngModel)]="groupNameForm" [ngModelOptions]="{standalone: true}" [disabled]="!canEditGroup" placeholder="Nombre del grupo" />
+    </div>
+
+    <div class="config-field">
+      <span class="config-label">Permisos activos del usuario</span>
+      <span class="permission-summary">{{ currentPermissionSummary }}</span>
+      <div class="permission-tags">
+        @if (currentGroupPermissions.length > 0) {
+          @for (permission of currentGroupPermissions; track permission) {
+            <p-tag [value]="permissionLabel(permission)" [severity]="permissionSeverity(permission)" />
+          }
+        } @else {
+          <p-tag value="Sin permisos administrativos" severity="secondary" />
+        }
+      </div>
+    </div>
+  </div>
+
+  <div class="group-config-actions">
+    <p-button label="Guardar nombre" icon="pi pi-save" (onClick)="saveGroupSettings()" [disabled]="!canEditGroup" />
+    <p-button label="Eliminar grupo" icon="pi pi-trash" severity="danger" (onClick)="deleteCurrentGroup()" [disabled]="!canDeleteGroup" />
+  </div>
+
+  @if (!hasGroupAdminAccess) {
+    <p-message severity="warn" text="Tu perfil no cuenta con permisos administrativos para este grupo." />
+  }
+
+  <div class="member-manage-row">
+    <input pInputText [(ngModel)]="newMember" [ngModelOptions]="{standalone: true}" placeholder="Añadir usuario por email" [disabled]="!canAddGroupMembers" />
+    <p-button label="Añadir miembro" severity="secondary" icon="pi pi-user-plus" (onClick)="addMember()" [disabled]="!canAddGroupMembers" />
+  </div>
+
+  <p-table [value]="groupMembers" styleClass="p-datatable-sm">
+    <ng-template pTemplate="header">
+      <tr>
+        <th scope="col">Miembro</th>
+        <th scope="col">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="body" let-member>
+      <tr>
+        <td>{{ member }}</td>
+        <td>
+          <p-button label="Eliminar" severity="danger" size="small" (onClick)="removeMember(member)" [disabled]="!canRemoveGroupMembers" />
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="emptymessage">
+      <tr>
+        <td colspan="2">No hay miembros registrados en este grupo.</td>
+      </tr>
+    </ng-template>
+  </p-table>
+</p-card>
+
+<p-card header="Filtros de tickets" subheader="Filtrar y ordenar por estado, fechas y prioridad" styleClass="group-card">
+  <div class="filters-toolbar">
+    <div class="filters-quick-row">
+      <p-selectbutton
+        [options]="quickFilterOptions"
+        optionLabel="label"
+        optionValue="value"
+        [(ngModel)]="quickFilter"
+        [ngModelOptions]="{standalone: true}"
+        ariaLabel="Filtros rápidos"
+      />
+    </div>
+
+    <div class="filters-actions-row">
+      <p-button
+        label="Limpiar rápidos"
+        icon="pi pi-filter-slash"
+        severity="secondary"
+        (onClick)="clearQuickFilter()"
+        [disabled]="quickFilter === 'all'"
+      />
+      <p-button
+        label="Limpiar todo"
+        icon="pi pi-eraser"
+        severity="secondary"
+        (onClick)="clearAllFilters()"
+      />
+    </div>
+  </div>
+
+  <div class="filters-grid">
+    <div class="filter-field">
+      <span class="filter-field-label">Estado</span>
+      <p-select
+        [options]="statuses"
+        [(ngModel)]="filterStatus"
+        [ngModelOptions]="{standalone: true}"
+        [showClear]="true"
+        placeholder="Todos los estados"
+        styleClass="w-full"
+      />
+    </div>
+
+    <div class="filter-field">
+      <span class="filter-field-label">Prioridad</span>
+      <p-select
+        [options]="priorities"
+        [(ngModel)]="filterPriority"
+        [ngModelOptions]="{standalone: true}"
+        [showClear]="true"
+        placeholder="Todas las prioridades"
+        styleClass="w-full"
+      />
+    </div>
+
+    <div class="filter-field">
+      <span class="filter-field-label">Asignación</span>
+      <p-select
+        [options]="assignedFilterOptions"
+        optionLabel="label"
+        optionValue="value"
+        [(ngModel)]="filterAssignedTo"
+        [ngModelOptions]="{standalone: true}"
+        [showClear]="true"
+        placeholder="Cualquier asignación"
+        styleClass="w-full"
+      />
+    </div>
+
+    <div class="filter-field">
+      <span class="filter-field-label">Fecha de creación</span>
+      <div class="filter-pair">
+        <p-datepicker
+          [(ngModel)]="filterCreatedFrom"
+          [ngModelOptions]="{standalone: true}"
+          dateFormat="yy-mm-dd"
+          placeholder="Desde"
+          [showIcon]="true"
+          styleClass="w-full"
+        />
+
+        <p-datepicker
+          [(ngModel)]="filterCreatedTo"
+          [ngModelOptions]="{standalone: true}"
+          dateFormat="yy-mm-dd"
+          placeholder="Hasta"
+          [showIcon]="true"
+          styleClass="w-full"
+        />
+      </div>
+    </div>
+
+    <div class="filter-field">
+      <span class="filter-field-label">Fecha límite</span>
+      <div class="filter-pair">
+        <p-datepicker
+          [(ngModel)]="filterDueFrom"
+          [ngModelOptions]="{standalone: true}"
+          dateFormat="yy-mm-dd"
+          placeholder="Desde"
+          [showIcon]="true"
+          styleClass="w-full"
+        />
+
+        <p-datepicker
+          [(ngModel)]="filterDueTo"
+          [ngModelOptions]="{standalone: true}"
+          dateFormat="yy-mm-dd"
+          placeholder="Hasta"
+          [showIcon]="true"
+          styleClass="w-full"
+        />
+      </div>
+    </div>
+  </div>
+
+  <div class="filters-sort-row">
+    <p-select
+      [options]="[
+        { label: 'Fecha creación (reciente)', value: 'createdDesc' },
+        { label: 'Fecha creación (antigua)', value: 'createdAsc' },
+        { label: 'Fecha límite (próxima)', value: 'dueAsc' },
+        { label: 'Fecha límite (lejana)', value: 'dueDesc' },
+        { label: 'Prioridad (alta a baja)', value: 'priorityDesc' }
+      ]"
+      optionLabel="label"
+      optionValue="value"
+      [(ngModel)]="filterSort"
+      [ngModelOptions]="{standalone: true}"
+      placeholder="Ordenar tickets"
+      styleClass="w-full"
+    />
+  </div>
+</p-card>
+
+@if (viewMode === 'kanban') {
+  <article class="kanban-grid">
+    @for (status of statuses; track status) {
+      @let statusTickets = ticketsByStatus(status);
+      <section class="kanban-col">
+        <div class="kanban-col-header">
+          <span class="kanban-col-title">{{ status }}</span>
+          <span class="kanban-col-count">{{ statusTickets.length }}</span>
+        </div>
+
+        <div
+          class="kanban-drop-zone"
+          cdkDropList
+          [id]="colId(status)"
+          [cdkDropListData]="statusTickets"
+          [cdkDropListConnectedTo]="dropListIds"
+          (cdkDropListDropped)="dropTicket($event, status)"
+        >
+          @for (ticket of statusTickets; track ticket.id) {
+            <div class="ticket-card" cdkDrag [cdkDragData]="ticket">
+              <div class="ticket-drag-handle" cdkDragHandle>
+                <span class="pi pi-bars"></span>
+              </div>
+
+              <div class="ticket-body">
+                <p class="ticket-title">{{ ticket.title }}</p>
+
+                <div class="ticket-tags">
+                  <p-tag [value]="ticket.status" [severity]="statusSeverity(ticket.status)" />
+                  <p-tag [value]="ticket.priority" [severity]="prioritySeverity(ticket.priority)" />
+                </div>
+
+                <p class="ticket-assigned">
+                  <span class="pi pi-user"></span> {{ ticket.assignedTo }}
+                </p>
+
+                <div class="ticket-dates">
+                  <span
+                    class="ticket-date"
+                    pTooltip="Fecha de creación"
+                    tooltipPosition="bottom"
+                  >
+                    <span class="pi pi-calendar-plus"></span> {{ ticket.createdAt }}
+                  </span>
+                  <span
+                    class="ticket-date"
+                    pTooltip="Fecha límite"
+                    tooltipPosition="bottom"
+                  >
+                    <span class="pi pi-calendar-clock"></span> {{ ticket.dueDate }}
+                  </span>
+                </div>
+
+                <p-button
+                  label="Detalle"
+                  size="small"
+                  severity="secondary"
+                  (onClick)="openTicketDetail(ticket)"
+                  styleClass="w-full"
+                />
+              </div>
+
+              <div class="cdk-drag-placeholder-custom" *cdkDragPlaceholder></div>
+            </div>
+          }
+
+          @if (ticketsByStatus(status).length === 0) {
+            <p class="kanban-empty">Sin tickets en este estado.<br />Arrastra uno aquí.</p>
+          }
+        </div>
+      </section>
+    }
+  </article>
+}
+
+@if (viewMode === 'list') {
+  <p-card header="Tickets en lista" subheader="Vista de listado con filtros y ordenamiento" styleClass="group-card">
+    <p-table [value]="filteredTickets" styleClass="p-datatable-sm">
+      <ng-template pTemplate="header">
+        <tr>
+          <th scope="col">ID / Título</th>
+          <th scope="col">Estado</th>
+          <th scope="col">Asignado</th>
+          <th scope="col">Prioridad</th>
+          <th scope="col">F. creación</th>
+          <th scope="col">F. límite</th>
+          <th scope="col">Acciones</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-ticket>
+        <tr>
+          <td>
+            <strong>#{{ ticket.id }}</strong>
+            <br />
+            <span>{{ ticket.title }}</span>
+          </td>
+          <td><p-tag [value]="ticket.status" [severity]="statusSeverity(ticket.status)" /></td>
+          <td>{{ ticket.assignedTo }}</td>
+          <td><p-tag [value]="ticket.priority" [severity]="prioritySeverity(ticket.priority)" /></td>
+          <td>{{ ticket.createdAt }}</td>
+          <td>{{ ticket.dueDate }}</td>
+          <td>
+            <p-button label="Detalle" size="small" severity="secondary" (onClick)="openTicketDetail(ticket)" />
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr>
+          <td colspan="7">No hay tickets para los filtros seleccionados.</td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </p-card>
+}
+
+<p-dialog
+  header="Crear ticket"
+  [modal]="true"
+  [(visible)]="createDialogVisible"
+  [style]="{ width: '42rem' }"
+  [draggable]="false"
+  [resizable]="false"
+>
+  <div class="detail-grid">
+    <div class="detail-field detail-field-full">
+      <span class="detail-label">Título</span>
+      <input pInputText [(ngModel)]="ticketForm.title" [ngModelOptions]="{standalone: true}" placeholder="Título" class="field" />
+    </div>
+
+    <div class="detail-field detail-field-full">
+      <span class="detail-label">Descripción</span>
+      <textarea pTextarea [(ngModel)]="ticketForm.description" [ngModelOptions]="{standalone: true}" rows="4" placeholder="Descripción" class="field"></textarea>
+    </div>
+
+    <div class="detail-field">
+      <span class="detail-label">Estado</span>
+      <p-select
+        [options]="statuses"
+        [(ngModel)]="ticketForm.status"
+        [ngModelOptions]="{standalone: true}"
+        placeholder="Estado"
+        styleClass="field w-full"
+      />
+    </div>
+
+    <div class="detail-field">
+      <span class="detail-label">Asignado a</span>
+      <p-select
+        [options]="assignableMemberOptions"
+        optionLabel="label"
+        optionValue="value"
+        [(ngModel)]="ticketForm.assignedTo"
+        [ngModelOptions]="{standalone: true}"
+        [showClear]="true"
+        placeholder="Selecciona un miembro del grupo"
+        styleClass="field w-full"
+      />
+      @if (groupMembers.includes(currentUser.email)) {
+        <p-button
+          label="Asignarme"
+          size="small"
+          severity="secondary"
+          (onClick)="assignCreateTicketToMe()"
+          styleClass="mini-action"
+        />
+      }
+    </div>
+
+    <div class="detail-field">
+      <span class="detail-label">Prioridad (7 niveles)</span>
+      <p-select
+        [options]="priorities"
+        [(ngModel)]="ticketForm.priority"
+        [ngModelOptions]="{standalone: true}"
+        placeholder="Prioridad"
+        styleClass="field w-full"
+      />
+    </div>
+
+    <div class="detail-field">
+      <span class="detail-label">Fecha de creación</span>
+      <p-datepicker [(ngModel)]="ticketForm.createdAt" [ngModelOptions]="{standalone: true}" dateFormat="yy-mm-dd" placeholder="Fecha creación" styleClass="field w-full" />
+    </div>
+
+    <div class="detail-field">
+      <span class="detail-label">Fecha límite</span>
+      <p-datepicker [(ngModel)]="ticketForm.dueDate" [ngModelOptions]="{standalone: true}" dateFormat="yy-mm-dd" placeholder="Fecha límite" styleClass="field w-full" />
+    </div>
+  </div>
+
+  <ng-template pTemplate="footer">
+    <p-button label="Cancelar" severity="secondary" (onClick)="createDialogVisible = false" />
+    <p-button label="Crear" (onClick)="saveTicket()" />
+  </ng-template>
+</p-dialog>
+
+<p-dialog
+  header="Detalle del ticket"
+  [modal]="true"
+  [(visible)]="detailDialogVisible"
+  [style]="{ width: '44rem' }"
+  [draggable]="false"
+  [resizable]="false"
+>
+  @if (selectedTicket) {
+    <div class="detail-header-meta">
+      <p class="detail-meta-item"><strong>Creador:</strong> {{ selectedTicket.createdBy }}</p>
+      <p class="detail-meta-item"><strong>Permisos:</strong> {{ selectedTicketPermissionText }}</p>
+    </div>
+
+    <div class="detail-grid">
+      <div class="detail-field detail-field-full">
+        <span class="detail-label">Título</span>
+        <input pInputText [(ngModel)]="detailForm.title" [ngModelOptions]="{standalone: true}" [disabled]="!canEditSelectedTicket" class="field" />
+      </div>
+
+      <div class="detail-field detail-field-full">
+        <span class="detail-label">Descripción</span>
+        <textarea pTextarea [(ngModel)]="detailForm.description" [ngModelOptions]="{standalone: true}" rows="4" [disabled]="!canEditSelectedTicket" class="field"></textarea>
+      </div>
+
+      <div class="detail-field">
+        <span class="detail-label">Estado actual</span>
+        <p-select
+          [options]="statuses"
+          [(ngModel)]="detailForm.status"
+          [ngModelOptions]="{standalone: true}"
+          [disabled]="!canChangeSelectedTicketStatus"
+          styleClass="field w-full"
+        />
+      </div>
+
+      <div class="detail-field">
+        <span class="detail-label">Asignado a</span>
+        <p-select
+          [options]="assignableMemberOptions"
+          optionLabel="label"
+          optionValue="value"
+          [(ngModel)]="detailForm.assignedTo"
+          [ngModelOptions]="{standalone: true}"
+          [disabled]="!canEditSelectedTicket"
+          styleClass="field w-full"
+        />
+        @if (canEditSelectedTicket && groupMembers.includes(currentUser.email)) {
+          <p-button
+            label="Asignarme"
+            size="small"
+            severity="secondary"
+            (onClick)="assignSelectedTicketToMe()"
+            styleClass="mini-action"
+          />
+        }
+      </div>
+
+      <div class="detail-field">
+        <span class="detail-label">Prioridad</span>
+        <p-select
+          [options]="priorities"
+          [(ngModel)]="detailForm.priority"
+          [ngModelOptions]="{standalone: true}"
+          [disabled]="!canEditSelectedTicket"
+          styleClass="field w-full"
+        />
+      </div>
+
+      <div class="detail-field">
+        <span class="detail-label">Fecha de creación</span>
+        <p-datepicker
+          [(ngModel)]="detailForm.createdAt"
+          [ngModelOptions]="{standalone: true}"
+          dateFormat="yy-mm-dd"
+          [disabled]="!canEditSelectedTicket"
+          styleClass="field w-full"
+        />
+      </div>
+
+      <div class="detail-field">
+        <span class="detail-label">Fecha límite</span>
+        <p-datepicker
+          [(ngModel)]="detailForm.dueDate"
+          [ngModelOptions]="{standalone: true}"
+          dateFormat="yy-mm-dd"
+          [disabled]="!canEditSelectedTicket"
+          styleClass="field w-full"
+        />
+      </div>
+    </div>
+
+    <p-table [value]="selectedTicket.comments" styleClass="p-datatable-sm">
+      <ng-template pTemplate="header">
+        <tr>
+          <th scope="col">Comentarios</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-comment>
+        <tr>
+          <td>{{ comment }}</td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr>
+          <td>Sin comentarios registrados.</td>
+        </tr>
+      </ng-template>
+    </p-table>
+
+    <textarea
+      pTextarea
+      [(ngModel)]="detailComment"
+      [ngModelOptions]="{standalone: true}"
+      rows="3"
+      placeholder="Agregar comentario"
+      class="field"
+      [disabled]="!canCommentSelectedTicket"
+    ></textarea>
+    <p-button
+      label="Agregar comentario"
+      severity="secondary"
+      (onClick)="addCommentToTicket()"
+      styleClass="top-action"
+      [disabled]="!canCommentSelectedTicket"
+    />
+
+    <p-table [value]="selectedTicket.history" styleClass="p-datatable-sm">
+      <ng-template pTemplate="header">
+        <tr>
+          <th scope="col">Historial de cambios</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-historyItem>
+        <tr>
+          <td>{{ historyItem }}</td>
+        </tr>
+      </ng-template>
+    </p-table>
+  }
+
+  <ng-template pTemplate="footer">
+    <p-button
+      label="Guardar cambios"
+      (onClick)="saveTicketDetail()"
+      [disabled]="!canEditSelectedTicket && !canChangeSelectedTicketStatus"
+    />
+    <p-button label="Cerrar" severity="secondary" (onClick)="detailDialogVisible = false" />
+  </ng-template>
+</p-dialog>

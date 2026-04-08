@@ -1,0 +1,93 @@
+.user-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.field-block {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.field-block-full {
+  grid-column: 1 / -1;
+}
+
+.field-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.actions-row {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.summary-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.admin-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.permission-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.permission-summary {
+  margin: 0.25rem 0 0;
+  color: var(--p-text-muted-color, #6b7280);
+  font-size: 0.85rem;
+}
+
+.permissions-table {
+  margin-top: 0.5rem;
+}
+
+:host ::ng-deep .permissions-table th:nth-child(2),
+:host ::ng-deep .permissions-table th:nth-child(3),
+:host ::ng-deep .permissions-table td:nth-child(2),
+:host ::ng-deep .permissions-table td:nth-child(3) {
+  width: 8rem;
+}
+
+:host ::ng-deep td .p-button {
+  margin-right: 0.35rem;
+}
+
+:host ::ng-deep td:last-child {
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .profile-layout,
+  .summary-grid,
+  .admin-layout {
+    grid-template-columns: 1fr;
+  }
+
+  :host ::ng-deep td:last-child {
+    white-space: normal;
+  }
+}

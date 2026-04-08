@@ -1,0 +1,42 @@
+:host {
+  width: 100%;
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.landing-card {
+  width: min(44rem, 100%);
+}
+
+.hero-image {
+  width: 100%;
+  height: 260px;
+  object-fit: cover;
+}
+
+.landing-text {
+  margin: 0;
+  text-align: center;
+}
+
+.landing-title,
+.landing-subtitle {
+  margin: 0;
+  text-align: center;
+}
+
+.actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 640px) {
+  .hero-image {
+    height: 200px;
+  }
+}

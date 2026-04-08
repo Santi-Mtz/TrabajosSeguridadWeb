@@ -1,0 +1,20 @@
+<p-card styleClass="landing-card" [style]="{ overflow: 'hidden' }">
+  <ng-template #header>
+    <img alt="Landing" class="hero-image" src="https://primefaces.org/cdn/primeng/images/card-ng.jpg" />
+  </ng-template>
+  <ng-template #title>
+    <h2 class="landing-title">Landing</h2>
+  </ng-template>
+  <ng-template #subtitle>
+    <p class="landing-subtitle">Bienvenido</p>
+  </ng-template>
+
+  <p class="landing-text">LANDING PAGE</p>
+
+  <ng-template #footer>
+    <article class="actions">
+      <p-button label="Iniciar sesión" routerLink="/login" />
+      <p-button label="Crear cuenta" severity="secondary" routerLink="/register" />
+    </article>
+  </ng-template>
+</p-card>
