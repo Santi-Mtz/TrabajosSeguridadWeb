@@ -1,0 +1,48 @@
+<section class="group-page">
+  <h1>Group</h1>
+  <p class="total">Total ({{ total }})</p>
+  @if (notification) {
+    <p-message [severity]="notification.severity" [text]="notification.text" />
+  }
+
+  <section class="crud-grid">
+    <p-card header="CRUD Group">
+      <div class="form-grid">
+        <input pInputText [(ngModel)]="form.name" placeholder="Nombre" />
+        <input pInputText [(ngModel)]="form.category" placeholder="Categoria" />
+        <input pInputText [(ngModel)]="form.level" placeholder="Nivel" />
+        <input pInputText [(ngModel)]="form.author" placeholder="Autor" />
+        <input pInputText type="number" min="0" [(ngModel)]="form.members" placeholder="Miembros" />
+        <input pInputText type="number" min="0" [(ngModel)]="form.tickets" placeholder="Tickets" />
+      </div>
+
+      <div class="actions-row">
+        <p-button [label]="editingId !== null ? 'Actualizar' : 'Crear'" (onClick)="saveGroup()" />
+        <p-button label="Limpiar" severity="secondary" (onClick)="resetForm()" />
+      </div>
+    </p-card>
+
+    <p-card header="Lista de grupos">
+      <div class="list-grid">
+        @for (group of groups; track group.id) {
+          <div class="list-item">
+            <div><strong>ID:</strong> {{ group.id }}</div>
+            <div><strong>Nombre:</strong> {{ group.name }}</div>
+            <div><strong>Categoria:</strong> {{ group.category }}</div>
+            <div><strong>Nivel:</strong> {{ group.level }}</div>
+            <div><strong>Autor:</strong> {{ group.author }}</div>
+            <div><strong>Miembros:</strong> {{ group.members }}</div>
+            <div><strong>Tickets:</strong> {{ group.tickets }}</div>
+
+            <div class="actions-row">
+              <p-button label="Editar" severity="secondary" (onClick)="editGroup(group)" />
+              <p-button label="Eliminar" severity="danger" (onClick)="deleteGroup(group.id)" />
+            </div>
+          </div>
+        } @empty {
+          <p>No hay grupos registrados.</p>
+        }
+      </div>
+    </p-card>
+  </section>
+</section>

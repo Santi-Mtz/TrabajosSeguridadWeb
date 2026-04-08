@@ -1,0 +1,9 @@
+.dashboard-text {
+  min-height: calc(100dvh - 4rem);
+  display: grid;
+  place-items: center;
+}
+
+.dashboard-text h1 {
+  margin: 0;
+}
