@@ -16,6 +16,7 @@ import { TextareaModule } from 'primeng/textarea';
 import { DatePickerModule } from 'primeng/datepicker';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthSessionService, AuthSessionUser } from '../../services/auth-session.service';
+import { AuthorizationService } from '../../services/authorization.service';
 import { ValidationService } from '../../services/validation.service';
 import { GroupBoardDataService } from './group-board-data.service';
 import { GroupRulesService } from './group-rules.service';
@@ -77,6 +78,7 @@ export class GroupComponent implements OnInit {
     private readonly router: Router,
     private readonly cdr: ChangeDetectorRef,
     private readonly authSession: AuthSessionService,
+    private readonly authorization: AuthorizationService,
     private readonly validation: ValidationService,
     private readonly groupBoardData: GroupBoardDataService,
     private readonly groupRules: GroupRulesService,
@@ -179,7 +181,27 @@ export class GroupComponent implements OnInit {
   }
 
   get canAddGroupMembers(): boolean {
-    return this.hasGroupPermission('group:add');
+    return this.hasGroupPermission('group:add:members');
+  }
+
+  get canCreateTickets(): boolean {
+    return this.authorization.canCreateTickets();
+  }
+
+  get canEditTicketsByPermission(): boolean {
+    return this.authorization.has('ticket:edit');
+  }
+
+  get canChangeTicketStatusByPermission(): boolean {
+    return this.authorization.has('ticket:edit:status');
+  }
+
+  get canCommentTicketByPermission(): boolean {
+    return this.authorization.has('ticket:edit:comment');
+  }
+
+  get canOpenUserManagement(): boolean {
+    return this.authorization.canAccessUserAdminSection();
   }
 
   get canEditGroup(): boolean {
@@ -187,7 +209,11 @@ export class GroupComponent implements OnInit {
   }
 
   get canDeleteGroup(): boolean {
-    return this.hasGroupPermission('group:delete');
+    return this.hasGroupPermission('group:remove');
+  }
+
+  get canRemoveGroupMembers(): boolean {
+    return this.hasGroupPermission('group:remove:members');
   }
 
   get canCreateGroup(): boolean {
@@ -278,16 +304,26 @@ export class GroupComponent implements OnInit {
   }
 
   get canEditSelectedTicket(): boolean {
-    return this.selectedTicket !== null && this.groupRules.isTicketCreator(this.selectedTicket, this.currentUser.email, this.currentUser.displayName);
+    return this.selectedTicket !== null
+      && this.canEditTicketsByPermission
+      && this.groupRules.isTicketCreator(this.selectedTicket, this.currentUser.email, this.currentUser.displayName);
   }
 
   get canChangeSelectedTicketStatus(): boolean {
+    if (!this.canChangeTicketStatusByPermission) {
+      return false;
+    }
+
     return this.selectedTicket !== null
       && (this.canEditSelectedTicket
         || this.groupRules.isTicketAssignee(this.selectedTicket, this.currentUser.email, this.currentUser.displayName));
   }
 
   get canCommentSelectedTicket(): boolean {
+    if (!this.canCommentTicketByPermission) {
+      return false;
+    }
+
     return this.canChangeSelectedTicketStatus;
   }
 
@@ -337,6 +373,10 @@ export class GroupComponent implements OnInit {
   }
 
   openUserManagement(): void {
+    if (!this.canOpenUserManagement) {
+      return;
+    }
+
     void this.router.navigate(['/user'], {
       queryParams: {
         fromGroupId: this.selectedGroupId,
@@ -358,10 +398,15 @@ export class GroupComponent implements OnInit {
       return;
     }
 
+    if (!this.canChangeTicketStatusByPermission) {
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para actualizar tickets.');
+      return;
+    }
+
     const ticket = event.item.data as TicketRecord;
 
     if (!this.groupRules.canChangeTicketStatus(ticket, this.currentUser.email, this.currentUser.displayName)) {
-      this.pushNotification('error', 'Acceso denegado', 'Solo el creador o el usuario asignado puede cambiar el estado.');
+      this.pushNotification('error', 'Operación no permitida', 'Solo la persona creadora o asignada puede cambiar el estado del ticket.');
       return;
     }
 
@@ -382,7 +427,7 @@ export class GroupComponent implements OnInit {
 
     this.syncGroupMetrics();
     this.persistTickets();
-    this.pushNotification('success', 'Actualizado', `Ticket movido a "${targetStatus}".`);
+    this.pushNotification('success', 'Operación completada', `El ticket se movió al estado "${targetStatus}".`);
   }
 
   onGroupChange(): void {
@@ -396,19 +441,19 @@ export class GroupComponent implements OnInit {
     this.notification = null;
 
     if (!this.canCreateGroup) {
-      this.pushNotification('error', 'Acceso denegado', 'No tienes permiso group:add para crear un espacio de trabajo.');
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para crear grupos.');
       return;
     }
 
     const name = this.newGroupName.trim();
     if (!name) {
-      this.pushNotification('error', 'Error', 'Escribe un nombre para crear el grupo.');
+      this.pushNotification('error', 'Validación', 'Especifica un nombre para crear el grupo.');
       return;
     }
 
     const exists = this.groups.some((group) => group.name.trim().toLowerCase() === name.toLowerCase());
     if (exists) {
-      this.pushNotification('error', 'Error', 'Ya existe un grupo con ese nombre.');
+      this.pushNotification('error', 'Validación', 'Ya existe un grupo registrado con ese nombre.');
       return;
     }
 
@@ -430,8 +475,11 @@ export class GroupComponent implements OnInit {
     this.membersByGroup[nextId] = [memberEmail];
     this.permissionsByGroup[nextId] = {
       'group:add': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com'],
+      'group:view': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com'],
       'group:edit': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com'],
-      'group:delete': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com']
+      'group:remove': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com'],
+      'group:add:members': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com'],
+      'group:remove:members': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com']
     };
 
     this.persistGroups();
@@ -442,20 +490,20 @@ export class GroupComponent implements OnInit {
     this.groupNameForm = name;
     this.newGroupName = '';
     this.showCreateGroupForm = false;
-    this.pushNotification('success', 'Creado', 'Espacio de trabajo creado correctamente.');
+    this.pushNotification('success', 'Operación completada', 'El grupo se creó correctamente.');
   }
 
   saveGroupSettings(): void {
     this.notification = null;
 
     if (!this.canEditGroup) {
-      this.pushNotification('error', 'Acceso denegado', 'No tienes permiso group:edit para modificar el grupo.');
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para modificar grupos.');
       return;
     }
 
     const name = this.groupNameForm.trim();
     if (!name) {
-      this.pushNotification('error', 'Error', 'El nombre del grupo no puede estar vacío.');
+      this.pushNotification('error', 'Validación', 'El nombre del grupo no puede estar vacío.');
       return;
     }
 
@@ -464,7 +512,7 @@ export class GroupComponent implements OnInit {
     );
 
     if (duplicated) {
-      this.pushNotification('error', 'Error', 'Ya existe otro grupo con ese nombre.');
+      this.pushNotification('error', 'Validación', 'Ya existe otro grupo con ese nombre.');
       return;
     }
 
@@ -472,19 +520,19 @@ export class GroupComponent implements OnInit {
       group.id === this.selectedGroupId ? { ...group, name } : group
     );
     this.persistGroups();
-    this.pushNotification('success', 'Actualizado', 'Nombre del grupo actualizado correctamente.');
+    this.pushNotification('success', 'Operación completada', 'El nombre del grupo se actualizó correctamente.');
   }
 
   deleteCurrentGroup(): void {
     this.notification = null;
 
     if (!this.canDeleteGroup) {
-      this.pushNotification('error', 'Acceso denegado', 'No tienes permiso group:delete para eliminar el grupo.');
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para eliminar grupos.');
       return;
     }
 
     if (this.groups.length <= 1) {
-      this.pushNotification('error', 'Error', 'Debe existir al menos un grupo en el sistema.');
+      this.pushNotification('error', 'Operación no permitida', 'Debe existir al menos un grupo registrado en el sistema.');
       return;
     }
 
@@ -511,11 +559,17 @@ export class GroupComponent implements OnInit {
 
     this.selectedGroupId = this.groups[0]?.id ?? 1;
     this.groupNameForm = this.selectedGroupName;
-    this.pushNotification('success', 'Eliminado', 'Espacio de trabajo eliminado correctamente.');
+    this.pushNotification('success', 'Operación completada', 'El grupo se eliminó correctamente.');
   }
 
   openCreateDialog(): void {
     this.notification = null;
+
+    if (!this.canCreateTickets) {
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para crear tickets.');
+      return;
+    }
+
     this.ticketForm = createEmptyTicketForm();
     this.createDialogVisible = true;
   }
@@ -531,8 +585,13 @@ export class GroupComponent implements OnInit {
   saveTicket(): void {
     this.notification = null;
 
+    if (!this.canCreateTickets) {
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para crear tickets.');
+      return;
+    }
+
     if (!this.isTicketFormValid()) {
-      this.pushNotification('error', 'Error', 'Completa correctamente todos los campos del ticket.');
+      this.pushNotification('error', 'Validación', 'Completa correctamente los campos obligatorios del ticket.');
       return;
     }
 
@@ -545,7 +604,7 @@ export class GroupComponent implements OnInit {
     );
 
     if (!result.ticket) {
-      this.pushNotification('error', 'Error', result.error ?? 'No fue posible crear el ticket.');
+      this.pushNotification('error', 'Validación', result.error ?? 'No fue posible crear el ticket.');
       return;
     }
 
@@ -560,7 +619,7 @@ export class GroupComponent implements OnInit {
     this.detailForm = createFormFromTicket(newTicket);
     this.detailComment = '';
     this.detailDialogVisible = true;
-    this.pushNotification('success', 'Creado', 'Ticket creado correctamente.');
+    this.pushNotification('success', 'Operación completada', 'El ticket se creó correctamente.');
   }
 
   openTicketDetail(ticket: TicketRecord): void {
@@ -577,7 +636,7 @@ export class GroupComponent implements OnInit {
     }
 
     if (!this.canEditSelectedTicket && !this.canChangeSelectedTicketStatus) {
-      this.pushNotification('error', 'Acceso denegado', 'No tienes permiso para modificar este ticket.');
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para modificar este ticket.');
       return;
     }
 
@@ -586,7 +645,7 @@ export class GroupComponent implements OnInit {
       ? this.groupTicketFacade.validateEditableDetailForm(this.detailForm)
       : null;
     if (validationError) {
-      this.pushNotification('error', 'Error', validationError);
+      this.pushNotification('error', 'Validación', validationError);
       return;
     }
 
@@ -603,7 +662,7 @@ export class GroupComponent implements OnInit {
     }
 
     if (historyChanges.length === 0) {
-      this.pushNotification('error', 'Sin cambios', 'No hay cambios para guardar en el ticket.');
+      this.pushNotification('error', 'Sin cambios', 'No se detectaron cambios para guardar en el ticket.');
       return;
     }
 
@@ -613,7 +672,7 @@ export class GroupComponent implements OnInit {
     ];
 
     this.updateTicket(nextTicket);
-    this.pushNotification('success', 'Actualizado', 'Ticket actualizado correctamente.');
+    this.pushNotification('success', 'Operación completada', 'El ticket se actualizó correctamente.');
   }
 
   assignSelectedTicketToMe(): void {
@@ -630,13 +689,13 @@ export class GroupComponent implements OnInit {
     }
 
     if (!this.canCommentSelectedTicket) {
-      this.pushNotification('error', 'Acceso denegado', 'No tienes permiso para comentar este ticket.');
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para comentar este ticket.');
       return;
     }
 
     const comment = this.detailComment.trim();
     if (!comment) {
-      this.pushNotification('error', 'Error', 'Escribe un comentario para agregarlo al ticket.');
+      this.pushNotification('error', 'Validación', 'Escribe un comentario antes de registrarlo en el ticket.');
       return;
     }
 
@@ -656,31 +715,31 @@ export class GroupComponent implements OnInit {
       this.detailForm = createFormFromTicket(this.selectedTicket);
     }
     this.detailComment = '';
-    this.pushNotification('success', 'Actualizado', 'Comentario agregado al ticket.');
+    this.pushNotification('success', 'Operación completada', 'El comentario se agregó al ticket correctamente.');
   }
 
   addMember(): void {
     this.notification = null;
 
     if (!this.canAddGroupMembers) {
-      this.pushNotification('error', 'Acceso denegado', 'No tienes permiso group:add para agregar usuarios al grupo.');
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para agregar miembros al grupo.');
       return;
     }
 
     const member = this.newMember.trim().toLowerCase();
     if (!member) {
-      this.pushNotification('error', 'Error', 'Ingresa email o usuario para añadir al grupo.');
+      this.pushNotification('error', 'Validación', 'Ingresa un correo electrónico para agregar al miembro.');
       return;
     }
 
     if (!this.validation.isValidEmail(member)) {
-      this.pushNotification('error', 'Error', 'Ingresa un correo electrónico válido para añadir al grupo.');
+      this.pushNotification('error', 'Validación', 'Ingresa una dirección de correo electrónico válida para agregar al miembro.');
       return;
     }
 
     const existing = this.groupMembers.includes(member);
     if (existing) {
-      this.pushNotification('error', 'Error', 'El miembro ya existe en el grupo.');
+      this.pushNotification('error', 'Validación', 'El miembro ya se encuentra registrado en este grupo.');
       return;
     }
 
@@ -689,14 +748,14 @@ export class GroupComponent implements OnInit {
     this.newMember = '';
     this.persistMembers();
     this.persistGroups();
-    this.pushNotification('success', 'Actualizado', 'Miembro agregado al grupo.');
+    this.pushNotification('success', 'Operación completada', 'El miembro se agregó al grupo correctamente.');
   }
 
   removeMember(member: string): void {
     this.notification = null;
 
-    if (!this.canDeleteGroup) {
-      this.pushNotification('error', 'Acceso denegado', 'No tienes permiso group:delete para eliminar usuarios del grupo.');
+    if (!this.canRemoveGroupMembers) {
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para remover miembros del grupo.');
       return;
     }
 
@@ -704,7 +763,7 @@ export class GroupComponent implements OnInit {
     this.syncGroupMetrics();
     this.persistMembers();
     this.persistGroups();
-    this.pushNotification('success', 'Eliminado', 'Miembro eliminado del grupo.');
+    this.pushNotification('success', 'Operación completada', 'El miembro se eliminó del grupo correctamente.');
   }
 
   private pushNotification(severity: 'success' | 'error', summary: string, detail: string): void {
@@ -717,7 +776,7 @@ export class GroupComponent implements OnInit {
     this.selectedGroupId = result.selectedGroupId;
 
     if (result.restoredInvalid) {
-      this.pushNotification('error', 'Error', 'Se restauraron grupos por datos inválidos en almacenamiento local.');
+      this.pushNotification('error', 'Integridad de datos', 'Se restauraron los grupos debido a datos inválidos en el almacenamiento local.');
     }
   }
 
@@ -830,10 +889,16 @@ export class GroupComponent implements OnInit {
     switch (permission) {
       case 'group:add':
         return 'Crear grupo';
+      case 'group:view':
+        return 'Ver grupo';
       case 'group:edit':
         return 'Editar grupo';
-      case 'group:delete':
+      case 'group:remove':
         return 'Eliminar grupo';
+      case 'group:add:members':
+        return 'Agregar miembros';
+      case 'group:remove:members':
+        return 'Remover miembros';
       default:
         return permission;
     }
@@ -842,10 +907,13 @@ export class GroupComponent implements OnInit {
   permissionSeverity(permission: GroupPermission): 'success' | 'warn' | 'danger' {
     switch (permission) {
       case 'group:add':
+      case 'group:view':
+      case 'group:add:members':
         return 'success';
       case 'group:edit':
+      case 'group:remove:members':
         return 'warn';
-      case 'group:delete':
+      case 'group:remove':
         return 'danger';
       default:
         return 'warn';

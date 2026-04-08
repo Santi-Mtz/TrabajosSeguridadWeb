@@ -127,6 +127,6 @@ export class RegisterComponent {
       return;
     }
 
-    this.successMessage = 'Registro completado correctamente.';
+    this.successMessage = 'Registro completado correctamente. Tu cuenta fue creada con éxito.';
   }
 }

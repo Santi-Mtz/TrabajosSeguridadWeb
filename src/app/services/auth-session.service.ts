@@ -14,24 +14,36 @@ export class AuthSessionService {
 
   constructor(private readonly storage: StorageService) {}
 
-  getCurrentUser(fallback: AuthSessionUser): AuthSessionUser {
+  getCurrentUserOrNull(): AuthSessionUser | null {
     try {
       const parsed = this.storage.getJson<Partial<AuthSessionUser>>(this.authStorageKey);
       if (!parsed) {
-        return fallback;
+        return null;
       }
 
       if (typeof parsed.email !== 'string' || typeof parsed.displayName !== 'string') {
-        throw new TypeError('Formato inválido');
+        throw new TypeError('Formato invalido');
       }
 
-      return {
-        email: parsed.email.trim().toLowerCase(),
-        displayName: parsed.displayName.trim()
-      };
+      const email = parsed.email.trim().toLowerCase();
+      const displayName = parsed.displayName.trim();
+
+      if (!email || !displayName) {
+        return null;
+      }
+
+      return { email, displayName };
     } catch {
-      return fallback;
+      return null;
     }
+  }
+
+  hasCurrentUser(): boolean {
+    return this.getCurrentUserOrNull() !== null;
+  }
+
+  getCurrentUser(fallback: AuthSessionUser): AuthSessionUser {
+    return this.getCurrentUserOrNull() ?? fallback;
   }
 
   setCurrentUser(user: AuthSessionUser): void {

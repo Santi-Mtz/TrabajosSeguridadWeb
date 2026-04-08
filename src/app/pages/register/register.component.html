@@ -1,4 +1,4 @@
-<app-auth-shell title="Register" subtitle="Inicio de registro" heroAltText="Registro" cardWidth="56rem" contentWidth="920px" heroHeight="210px">
+<app-auth-shell title="Registro" subtitle="Crea tu cuenta de acceso" heroAltText="Registro" cardWidth="56rem" contentWidth="920px" heroHeight="210px">
   <article auth-body class="content-wrap">
     <article class="form-grid">
       <article class="field-block">
@@ -9,7 +9,7 @@
           <input pInputText [(ngModel)]="username" [ngModelOptions]="{standalone: true}" placeholder="Usuario" autocomplete="off" />
         </p-inputgroup>
         @if (submitAttempted && !username.trim()) {
-          <p-message severity="error" text="El usuario es obligatorio." />
+          <p-message severity="error" text="El nombre de usuario es obligatorio." />
         }
       </article>
 
@@ -45,10 +45,10 @@
           <input pInputText [(ngModel)]="email" [ngModelOptions]="{standalone: true}" placeholder="Correo electrónico" autocomplete="off" />
         </p-inputgroup>
         @if (submitAttempted && !email.trim()) {
-          <p-message severity="error" text="El correo es obligatorio." />
+          <p-message severity="error" text="El correo electrónico es obligatorio." />
         }
         @if (submitAttempted && email.trim() && !hasValidEmail) {
-          <p-message severity="error" text="Ingresa un correo válido." />
+          <p-message severity="error" text="Ingresa una dirección de correo electrónico válida." />
         }
       </article>
 
@@ -63,7 +63,7 @@
           <p-message severity="error" text="El teléfono es obligatorio." />
         }
         @if (submitAttempted && phone.trim() && !hasValidPhone) {
-          <p-message severity="error" text="El teléfono debe tener solo números (7 a 15 dígitos)." />
+          <p-message severity="error" text="Ingresa un número de teléfono válido (solo dígitos, entre 7 y 15 caracteres)." />
         }
       </article>
 
@@ -85,7 +85,7 @@
           <p-message severity="error" text="La fecha de nacimiento es obligatoria." />
         }
         @if (submitAttempted && birthDateValue && !isAdult) {
-          <p-message severity="error" text="Solo se permite registro para mayores de edad." />
+          <p-message severity="error" text="El registro está disponible únicamente para personas mayores de edad." />
         }
       </article>
 
@@ -95,7 +95,7 @@
           <p-message severity="error" text="La contraseña es obligatoria." />
         }
         @if (submitAttempted && password.trim() && !hasStrongPassword) {
-          <p-message severity="error" [text]="'La contraseña debe tener mínimo 10 caracteres y al menos un símbolo especial (' + specialSymbolDescription + ').'" />
+          <p-message severity="error" [text]="'La contraseña debe incluir al menos 10 caracteres y un símbolo especial (' + specialSymbolDescription + ').'" />
         }
       </article>
 
@@ -105,7 +105,7 @@
           <p-message severity="error" text="La confirmación de contraseña es obligatoria." />
         }
         @if (submitAttempted && confirmPassword.trim() && !passwordsMatch) {
-          <p-message severity="error" text="Las contraseñas no coinciden." />
+          <p-message severity="error" text="Las contraseñas ingresadas no coinciden." />
         }
       </article>
     </article>
@@ -115,7 +115,7 @@
     </footer>
 
     @if (submitAttempted && !isFormValid) {
-      <p-message severity="error" text="Completa correctamente todos los campos para registrarte." />
+      <p-message severity="error" text="Revisa la información capturada y completa correctamente los campos requeridos para continuar." />
     }
 
     @if (successMessage) {

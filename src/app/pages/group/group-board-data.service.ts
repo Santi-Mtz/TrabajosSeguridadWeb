@@ -100,13 +100,19 @@ export class GroupBoardDataService {
   private readonly defaultPermissionsByGroup: GroupPermissionsMap = {
     1: {
       'group:add': ['superadmin@seguridadweb.com', 'admin@seguridadweb.com', 'santiago.martinez@example.com'],
+      'group:view': ['superadmin@seguridadweb.com', 'admin@seguridadweb.com', 'santiago.martinez@example.com'],
       'group:edit': ['superadmin@seguridadweb.com', 'admin@seguridadweb.com', 'santiago.martinez@example.com'],
-      'group:delete': ['superadmin@seguridadweb.com', 'admin@seguridadweb.com', 'santiago.martinez@example.com']
+      'group:remove': ['superadmin@seguridadweb.com', 'admin@seguridadweb.com', 'santiago.martinez@example.com'],
+      'group:add:members': ['superadmin@seguridadweb.com', 'admin@seguridadweb.com', 'santiago.martinez@example.com'],
+      'group:remove:members': ['superadmin@seguridadweb.com', 'admin@seguridadweb.com', 'santiago.martinez@example.com']
     },
     2: {
       'group:add': ['superadmin@seguridadweb.com', 'admin@seguridadweb.com', 'ana.gomez@example.com'],
+      'group:view': ['superadmin@seguridadweb.com', 'admin@seguridadweb.com', 'ana.gomez@example.com'],
       'group:edit': ['superadmin@seguridadweb.com', 'admin@seguridadweb.com', 'ana.gomez@example.com'],
-      'group:delete': ['superadmin@seguridadweb.com', 'admin@seguridadweb.com', 'ana.gomez@example.com']
+      'group:remove': ['superadmin@seguridadweb.com', 'admin@seguridadweb.com', 'ana.gomez@example.com'],
+      'group:add:members': ['superadmin@seguridadweb.com', 'admin@seguridadweb.com', 'ana.gomez@example.com'],
+      'group:remove:members': ['superadmin@seguridadweb.com', 'admin@seguridadweb.com', 'ana.gomez@example.com']
     }
   };
 

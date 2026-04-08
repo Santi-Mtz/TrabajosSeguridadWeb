@@ -1,6 +1,12 @@
 export type GroupStatus = 'Pendiente' | 'En progreso' | 'Revisión' | 'Bloqueado' | 'Hecho';
 export type GroupPriority = 'Muy baja' | 'Baja' | 'Media-baja' | 'Media' | 'Media-alta' | 'Alta' | 'Urgente';
-export type GroupPermission = 'group:add' | 'group:edit' | 'group:delete';
+export type GroupPermission =
+  | 'group:add'
+  | 'group:view'
+  | 'group:edit'
+  | 'group:remove'
+  | 'group:add:members'
+  | 'group:remove:members';
 export type QuickFilter = 'all' | 'mine' | 'unassigned' | 'high';
 export type TicketSort = 'createdAsc' | 'createdDesc' | 'dueAsc' | 'dueDesc' | 'priorityDesc';
 export type FlexDate = Date | string | null;
@@ -44,7 +50,14 @@ export type TicketRecord = {
 
 export const GROUP_STATUSES: GroupStatus[] = ['Pendiente', 'En progreso', 'Revisión', 'Bloqueado', 'Hecho'];
 export const GROUP_PRIORITIES: GroupPriority[] = ['Muy baja', 'Baja', 'Media-baja', 'Media', 'Media-alta', 'Alta', 'Urgente'];
-export const GROUP_PERMISSION_KEYS: GroupPermission[] = ['group:add', 'group:edit', 'group:delete'];
+export const GROUP_PERMISSION_KEYS: GroupPermission[] = [
+  'group:add',
+  'group:view',
+  'group:edit',
+  'group:remove',
+  'group:add:members',
+  'group:remove:members'
+];
 export const HIGH_PRIORITY_VALUES: GroupPriority[] = ['Media-alta', 'Alta', 'Urgente'];
 
 export const QUICK_FILTER_OPTIONS: Array<{ label: string; value: QuickFilter }> = [

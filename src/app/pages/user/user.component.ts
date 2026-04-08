@@ -9,6 +9,7 @@ import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { AuthSessionService, AuthSessionUser } from '../../services/auth-session.service';
+import { AppPermission } from '../../services/authorization.service';
 import { StorageService } from '../../services/storage.service';
 import { ValidationService } from '../../services/validation.service';
 import { UserFormComponent } from '../../components/user-form/user-form.component';
@@ -23,6 +24,7 @@ type UserRecord = {
   email: string;
   role: string;
   team: string;
+  isActive: boolean;
 };
 
 type UserFormModel = {
@@ -37,17 +39,7 @@ type UserFormModel = {
   team: string;
 };
 
-type UserPermission =
-  | 'group:add'
-  | 'group:edit'
-  | 'group:delete'
-  | 'ticket:create'
-  | 'ticket:edit'
-  | 'ticket:delete'
-  | 'user:create'
-  | 'user:edit'
-  | 'user:delete'
-  | 'user:permissions';
+type UserPermission = AppPermission;
 
 type TicketStatus = 'Pendiente' | 'En progreso' | 'Revisión' | 'Bloqueado' | 'Hecho';
 type TicketPriority = 'Muy baja' | 'Baja' | 'Media-baja' | 'Media' | 'Media-alta' | 'Alta' | 'Urgente';
@@ -100,16 +92,28 @@ export class UserComponent implements OnInit {
   private readonly superAdminEmail = 'superadmin@seguridadweb.com';
 
   readonly allPermissions: UserPermission[] = [
-    'group:add',
-    'group:edit',
-    'group:delete',
-    'ticket:create',
+    'ticket:add',
+    'ticket:view',
     'ticket:edit',
+    'ticket:edit:status',
+    'ticket:edit:comment',
+    'ticket:edit:priority',
+    'ticket:edit:deadline',
+    'ticket:edit:assign',
     'ticket:delete',
-    'user:create',
+    'group:add',
+    'group:view',
+    'group:edit',
+    'group:remove',
+    'group:add:members',
+    'group:remove:members',
+    'user:add',
+    'user:view:all',
     'user:edit',
-    'user:delete',
-    'user:permissions'
+    'user:remove',
+    'user:edit:permissions',
+    'user:deactivate',
+    'user:activate'
   ];
 
   private readonly defaultUsers: UserRecord[] = [
@@ -122,7 +126,8 @@ export class UserComponent implements OnInit {
       birthDate: '1995-01-01',
       email: this.superAdminEmail,
       role: 'superAdmin',
-      team: 'Seguridad web'
+      team: 'Seguridad web',
+      isActive: true
     },
     {
       id: 2,
@@ -133,7 +138,8 @@ export class UserComponent implements OnInit {
       birthDate: '2000-02-14',
       email: 'santiago.martinez@example.com',
       role: 'Estudiante',
-      team: 'Seguridad web'
+      team: 'Seguridad web',
+      isActive: true
     },
     {
       id: 3,
@@ -144,14 +150,35 @@ export class UserComponent implements OnInit {
       birthDate: '1998-06-10',
       email: 'admin@seguridadweb.com',
       role: 'Administrador',
-      team: 'Seguridad web'
+      team: 'Seguridad web',
+      isActive: true
     }
   ];
 
   private readonly defaultPermissionsByUser: Record<string, UserPermission[]> = {
     [this.superAdminEmail]: [...this.allPermissions],
-    'admin@seguridadweb.com': ['group:add', 'group:edit', 'ticket:create', 'ticket:edit', 'user:edit'],
-    'santiago.martinez@example.com': ['ticket:create', 'ticket:edit']
+    'admin@seguridadweb.com': [
+      'ticket:add',
+      'ticket:view',
+      'ticket:edit',
+      'ticket:edit:status',
+      'ticket:edit:comment',
+      'ticket:edit:priority',
+      'ticket:edit:deadline',
+      'ticket:edit:assign',
+      'group:add',
+      'group:view',
+      'group:edit',
+      'group:add:members',
+      'group:remove:members',
+      'user:view:all',
+      'user:add',
+      'user:edit',
+      'user:edit:permissions',
+      'user:activate',
+      'user:deactivate'
+    ],
+    'santiago.martinez@example.com': ['ticket:add', 'ticket:view', 'ticket:edit:status', 'ticket:edit:comment']
   };
 
   notification: { severity: 'success' | 'error'; text: string } | null = null;
@@ -200,17 +227,17 @@ export class UserComponent implements OnInit {
   }
 
   get hasUserCrudPermissions(): boolean {
-    return this.hasCurrentPermission('user:create') &&
+    return this.hasCurrentPermission('user:add') &&
       this.hasCurrentPermission('user:edit') &&
-      this.hasCurrentPermission('user:delete');
+      this.hasCurrentPermission('user:remove');
   }
 
   get canManagePermissions(): boolean {
-    return this.hasCurrentPermission('user:permissions');
+    return this.hasCurrentPermission('user:edit:permissions');
   }
 
   get canCreateUsers(): boolean {
-    return this.hasCurrentPermission('user:create');
+    return this.hasCurrentPermission('user:add');
   }
 
   get canEditUsers(): boolean {
@@ -218,11 +245,29 @@ export class UserComponent implements OnInit {
   }
 
   get canDeleteUsers(): boolean {
-    return this.hasCurrentPermission('user:delete');
+    return this.hasCurrentPermission('user:remove');
+  }
+
+  get canViewAllUsers(): boolean {
+    return this.hasCurrentPermission('user:view:all');
+  }
+
+  get canActivateUsers(): boolean {
+    return this.hasCurrentPermission('user:activate');
+  }
+
+  get canDeactivateUsers(): boolean {
+    return this.hasCurrentPermission('user:deactivate');
   }
 
   get canManageUsers(): boolean {
-    return this.hasUserCrudPermissions;
+    return this.canViewAllUsers ||
+      this.canCreateUsers ||
+      this.canEditUsers ||
+      this.canDeleteUsers ||
+      this.canManagePermissions ||
+      this.canActivateUsers ||
+      this.canDeactivateUsers;
   }
 
   get showAdminSection(): boolean {
@@ -319,7 +364,7 @@ export class UserComponent implements OnInit {
     this.notification = null;
 
     if (!this.isProfileValid) {
-      this.pushNotification('error', 'Error', this.getUserFormValidationMessage(this.profileForm, this.profileBirthDateIso, 'perfil'));
+      this.pushNotification('error', 'Validación', this.getUserFormValidationMessage(this.profileForm, this.profileBirthDateIso, 'perfil'));
       return;
     }
 
@@ -332,7 +377,8 @@ export class UserComponent implements OnInit {
       birthDate: this.profileBirthDateIso,
       email: this.profileForm.email.trim().toLowerCase(),
       role: this.profileForm.role.trim(),
-      team: this.profileForm.team.trim()
+      team: this.profileForm.team.trim(),
+      isActive: this.users.find((user) => user.id === this.profileForm.id)?.isActive ?? true
     };
 
     const existingIndex = this.users.findIndex((user) => user.id === normalized.id || user.email === normalized.email);
@@ -357,7 +403,7 @@ export class UserComponent implements OnInit {
       displayName: normalized.fullName
     };
 
-    this.pushNotification('success', 'Actualizado', 'Perfil actualizado correctamente.');
+    this.pushNotification('success', 'Operación completada', 'El perfil se actualizó correctamente.');
   }
 
   resetProfile(): void {
@@ -368,12 +414,12 @@ export class UserComponent implements OnInit {
     this.notification = null;
 
     if (!this.canManageUsers) {
-      this.pushNotification('error', 'Acceso denegado', 'Necesitas permisos CRUD de usuario para gestionar usuarios.');
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con permisos suficientes para administrar usuarios.');
       return;
     }
 
     if (!this.isCrudFormValid) {
-      this.pushNotification('error', 'Error', this.getUserFormValidationMessage(this.userCrudForm, this.crudBirthDateIso, 'usuario'));
+      this.pushNotification('error', 'Validacion', this.getUserFormValidationMessage(this.userCrudForm, this.crudBirthDateIso, 'usuario'));
       return;
     }
 
@@ -386,7 +432,8 @@ export class UserComponent implements OnInit {
       birthDate: this.crudBirthDateIso,
       email: this.userCrudForm.email.trim().toLowerCase(),
       role: this.userCrudForm.role.trim(),
-      team: this.userCrudForm.team.trim()
+      team: this.userCrudForm.team.trim(),
+      isActive: true
     };
 
     const duplicateEmail = this.users.some(
@@ -394,29 +441,31 @@ export class UserComponent implements OnInit {
     );
 
     if (duplicateEmail) {
-      this.pushNotification('error', 'Error', 'Ya existe un usuario con ese correo.');
+      this.pushNotification('error', 'Validacion', 'Ya existe un usuario registrado con ese correo electronico.');
       return;
     }
 
     if (this.editingUserId === null) {
       if (!this.canCreateUsers) {
-        this.pushNotification('error', 'Acceso denegado', 'No tienes permiso user:create.');
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para crear usuarios.');
         return;
       }
 
       const nextId = this.users.length ? Math.max(...this.users.map((user) => user.id)) + 1 : 1;
-      const newUser: UserRecord = { ...normalized, id: nextId };
+      const newUser: UserRecord = { ...normalized, id: nextId, isActive: true };
       this.users = [...this.users, newUser];
       this.permissionsByUser[newUser.email.toLowerCase()] = [];
-      this.pushNotification('success', 'Creado', 'Usuario creado correctamente.');
+      this.pushNotification('success', 'Operación completada', 'El usuario se creó correctamente.');
     } else {
       if (!this.canEditUsers) {
-        this.pushNotification('error', 'Acceso denegado', 'No tienes permiso user:edit.');
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para editar usuarios.');
         return;
       }
 
       const previous = this.users.find((user) => user.id === this.editingUserId);
-      this.users = this.users.map((user) => (user.id === this.editingUserId ? { ...normalized, id: user.id } : user));
+      this.users = this.users.map((user) => (user.id === this.editingUserId
+        ? { ...normalized, id: user.id, isActive: user.isActive }
+        : user));
 
       if (previous && previous.email !== normalized.email) {
         const oldKey = previous.email.toLowerCase();
@@ -426,7 +475,7 @@ export class UserComponent implements OnInit {
         this.permissionsByUser[newKey] = [...new Set(existingPerms)];
       }
 
-      this.pushNotification('success', 'Actualizado', 'Usuario actualizado correctamente.');
+      this.pushNotification('success', 'Operación completada', 'La información del usuario se actualizó correctamente.');
     }
 
     this.persistUsers();
@@ -450,17 +499,17 @@ export class UserComponent implements OnInit {
     this.notification = null;
 
     if (!this.canDeleteUsers) {
-      this.pushNotification('error', 'Acceso denegado', 'No tienes permiso user:delete.');
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para eliminar usuarios.');
       return;
     }
 
     if (user.username === 'superAdmin' || user.email.toLowerCase() === this.superAdminEmail) {
-      this.pushNotification('error', 'Error', 'No se puede eliminar el usuario superAdmin.');
+      this.pushNotification('error', 'Operación no permitida', 'No es posible eliminar la cuenta superAdmin.');
       return;
     }
 
     if (user.email.toLowerCase() === this.currentUser.email.toLowerCase()) {
-      this.pushNotification('error', 'Error', 'No puedes eliminar tu propio usuario activo.');
+      this.pushNotification('error', 'Operación no permitida', 'No es posible eliminar la cuenta con la que tienes la sesión activa.');
       return;
     }
 
@@ -474,7 +523,43 @@ export class UserComponent implements OnInit {
     this.persistUsers();
     this.persistPermissions();
     this.resetUserCrudForm();
-    this.pushNotification('success', 'Eliminado', 'Usuario eliminado correctamente.');
+    this.pushNotification('success', 'Operación completada', 'El usuario se eliminó correctamente.');
+  }
+
+  toggleUserActive(user: UserRecord): void {
+    this.notification = null;
+
+    const isTargetSuperAdmin = user.username === 'superAdmin' || user.email.toLowerCase() === this.superAdminEmail;
+    if (isTargetSuperAdmin) {
+      this.pushNotification('error', 'Operación no permitida', 'La cuenta superAdmin debe permanecer activa.');
+      return;
+    }
+
+    const isCurrentSessionUser = user.email.toLowerCase() === this.currentUser.email.toLowerCase();
+    if (isCurrentSessionUser && user.isActive) {
+      this.pushNotification('error', 'Operación no permitida', 'No es posible desactivar la cuenta con sesión activa.');
+      return;
+    }
+
+    if (user.isActive && !this.canDeactivateUsers) {
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para desactivar usuarios.');
+      return;
+    }
+
+    if (!user.isActive && !this.canActivateUsers) {
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para activar usuarios.');
+      return;
+    }
+
+    const nextState = !user.isActive;
+    this.users = this.users.map((item) => (item.id === user.id ? { ...item, isActive: nextState } : item));
+    this.persistUsers();
+
+    this.pushNotification(
+      'success',
+      'Operación completada',
+      nextState ? 'La cuenta de usuario fue activada correctamente.' : 'La cuenta de usuario fue desactivada correctamente.'
+    );
   }
 
   resetUserCrudForm(): void {
@@ -486,7 +571,7 @@ export class UserComponent implements OnInit {
     this.notification = null;
 
     if (!this.canManagePermissions) {
-      this.pushNotification('error', 'Acceso denegado', 'No tienes permiso user:permissions.');
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para administrar permisos de usuario.');
       return;
     }
 
@@ -496,7 +581,7 @@ export class UserComponent implements OnInit {
     }
 
     if (user.username === 'superAdmin' || user.email.toLowerCase() === this.superAdminEmail) {
-      this.pushNotification('error', 'Error', 'superAdmin siempre conserva todos los permisos.');
+      this.pushNotification('error', 'Operación no permitida', 'La cuenta superAdmin conserva todos los permisos por política del sistema.');
       return;
     }
 
@@ -545,6 +630,35 @@ export class UserComponent implements OnInit {
     return this.getPermissionsForEmail(user.email).includes(permission);
   }
 
+  permissionDisplayName(permission: UserPermission): string {
+    const labels: Record<UserPermission, string> = {
+      'ticket:add': 'Crear tickets',
+      'ticket:view': 'Ver tickets',
+      'ticket:edit': 'Editar ticket completo',
+      'ticket:edit:status': 'Cambiar estado de ticket',
+      'ticket:edit:comment': 'Comentar ticket',
+      'ticket:edit:priority': 'Cambiar prioridad de ticket',
+      'ticket:edit:deadline': 'Cambiar fecha limite de ticket',
+      'ticket:edit:assign': 'Reasignar ticket',
+      'ticket:delete': 'Eliminar tickets',
+      'group:add': 'Crear grupos',
+      'group:view': 'Ver grupos',
+      'group:edit': 'Editar grupos',
+      'group:remove': 'Eliminar grupos',
+      'group:add:members': 'Agregar miembros a grupos',
+      'group:remove:members': 'Remover miembros de grupos',
+      'user:add': 'Crear usuarios',
+      'user:view:all': 'Ver todos los usuarios',
+      'user:edit': 'Editar usuarios',
+      'user:remove': 'Eliminar usuarios',
+      'user:edit:permissions': 'Administrar permisos de usuario',
+      'user:deactivate': 'Desactivar usuarios',
+      'user:activate': 'Activar usuarios'
+    };
+
+    return labels[permission] ?? permission;
+  }
+
   private hasCurrentPermission(permission: UserPermission): boolean {
     return this.currentUserPermissions.includes(permission);
   }
@@ -566,7 +680,7 @@ export class UserComponent implements OnInit {
       this.sourceGroupId = Number.isFinite(fromGroupId) ? fromGroupId : null;
 
       if (this.requestedSection === 'admin' && !this.canManageUsers) {
-        this.pushNotification('error', 'Acceso denegado', 'No tienes permisos CRUD de usuario para la gestión administrativa.');
+        this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con permisos de administración de usuarios para acceder a esta sección.');
       }
 
       this.cdr.markForCheck();
@@ -595,7 +709,7 @@ export class UserComponent implements OnInit {
     } catch {
       this.users = [...this.defaultUsers];
       this.persistUsers();
-      this.pushNotification('error', 'Error', 'Se restauraron usuarios por datos inválidos en almacenamiento local.');
+      this.pushNotification('error', 'Integridad de datos', 'Se restauró el catálogo de usuarios debido a datos inválidos en el almacenamiento local.');
     }
   }
 
@@ -616,7 +730,8 @@ export class UserComponent implements OnInit {
         birthDate: '1995-01-01',
         email: this.superAdminEmail,
         role: 'superAdmin',
-        team: 'Seguridad web'
+        team: 'Seguridad web',
+        isActive: true
       },
       ...this.users
     ];
@@ -709,11 +824,39 @@ export class UserComponent implements OnInit {
         continue;
       }
 
-      result[email.toLowerCase()] = permissions
-        .filter((perm): perm is UserPermission => typeof perm === 'string' && allowed.has(perm as UserPermission));
+      result[email.toLowerCase()] = [...new Set(
+        permissions
+          .flatMap((perm) => (typeof perm === 'string' ? this.migrateLegacyPermission(perm) : []))
+          .filter((perm): perm is UserPermission => allowed.has(perm))
+      )];
     }
 
     return result;
+  }
+
+  private migrateLegacyPermission(permission: string): UserPermission[] {
+    const direct = permission as UserPermission;
+    if (this.allPermissions.includes(direct)) {
+      return [direct];
+    }
+
+    const legacyMap: Record<string, UserPermission[]> = {
+      'ticket:create': ['ticket:add'],
+      'ticket:edit': [
+        'ticket:edit',
+        'ticket:edit:status',
+        'ticket:edit:comment',
+        'ticket:edit:priority',
+        'ticket:edit:deadline',
+        'ticket:edit:assign'
+      ],
+      'group:delete': ['group:remove'],
+      'user:create': ['user:add'],
+      'user:delete': ['user:remove'],
+      'user:permissions': ['user:edit:permissions']
+    };
+
+    return legacyMap[permission] ?? [];
   }
 
   private getPermissionsForEmail(email: string): UserPermission[] {
@@ -736,18 +879,18 @@ export class UserComponent implements OnInit {
       form.role.trim().length === 0 ||
       form.team.trim().length === 0
     ) {
-      return `Completa todos los campos del ${scope}.`;
+      return `Completa todos los campos requeridos del ${scope}.`;
     }
 
     if (!this.validation.isValidEmail(form.email)) {
-      return 'Ingresa un correo electrónico válido.';
+      return 'Ingresa una dirección de correo electrónico válida.';
     }
 
     if (!this.validation.isValidPhone(form.phone)) {
-      return 'Ingresa un teléfono válido de 7 a 15 dígitos.';
+      return 'Ingresa un número telefónico válido de 7 a 15 dígitos.';
     }
 
-    return `Completa correctamente los campos del ${scope}.`;
+    return `Verifica la informacion capturada en el ${scope} e intenta nuevamente.`;
   }
 
   private normalizeBirthDate(v: string | Date | null): string {
@@ -791,7 +934,8 @@ export class UserComponent implements OnInit {
       birthDate: typeof source.birthDate === 'string' ? source.birthDate : '2000-01-01',
       email: typeof source.email === 'string' ? source.email.toLowerCase() : `user${index + 1}@example.com`,
       role: typeof source.role === 'string' ? source.role : 'Miembro',
-      team: typeof source.team === 'string' ? source.team : 'Sin equipo'
+      team: typeof source.team === 'string' ? source.team : 'Sin equipo',
+      isActive: typeof source.isActive === 'boolean' ? source.isActive : true
     };
   }
 

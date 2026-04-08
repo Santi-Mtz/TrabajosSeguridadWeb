@@ -89,46 +89,55 @@
   </div>
 </p-card>
 
-<section class="groups-section">
-  <h2 class="section-title">Tus grupos</h2>
-  <div class="groups-grid">
-    @for (group of groups; track group.id) {
-      <p-card styleClass="group-card">
-        <ng-template pTemplate="header">
-          <div class="group-card-header">
-            <span class="pi pi-users group-icon"></span>
-            <span class="group-name">{{ group.name }}</span>
+@if (canAccessGroup) {
+  <section class="groups-section">
+    <h2 class="section-title">Tus grupos</h2>
+    <div class="groups-grid">
+      @for (group of groups; track group.id) {
+        <p-card styleClass="group-card">
+          <ng-template pTemplate="header">
+            <div class="group-card-header">
+              <span class="pi pi-users group-icon"></span>
+              <span class="group-name">{{ group.name }}</span>
+            </div>
+          </ng-template>
+
+          <p class="group-ticket-total">{{ ticketsForGroup(group.id).length }} tickets en total</p>
+
+          <div class="group-status-row">
+            <p-tag severity="warn"      value="Pendiente"   [value]="'Pendiente · ' + ticketCountByStatus(group.id, 'Pendiente')" />
+            <p-tag severity="info"      value="En progreso" [value]="'En progreso · ' + ticketCountByStatus(group.id, 'En progreso')" />
+            <p-tag severity="secondary" value="Bloqueado"  [value]="'Bloqueado · ' + ticketCountByStatus(group.id, 'Bloqueado')" />
+            <p-tag severity="success"   value="Hecho"      [value]="'Hecho · ' + ticketCountByStatus(group.id, 'Hecho')" />
           </div>
-        </ng-template>
 
-        <p class="group-ticket-total">{{ ticketsForGroup(group.id).length }} tickets en total</p>
-
-        <div class="group-status-row">
-          <p-tag severity="warn"      value="Pendiente"   [value]="'Pendiente · ' + ticketCountByStatus(group.id, 'Pendiente')" />
-          <p-tag severity="info"      value="En progreso" [value]="'En progreso · ' + ticketCountByStatus(group.id, 'En progreso')" />
-          <p-tag severity="secondary" value="Bloqueado"  [value]="'Bloqueado · ' + ticketCountByStatus(group.id, 'Bloqueado')" />
-          <p-tag severity="success"   value="Hecho"      [value]="'Hecho · ' + ticketCountByStatus(group.id, 'Hecho')" />
-        </div>
-
-        <ng-template pTemplate="footer">
-          <div class="group-card-actions">
-            <p-button
-              label="Entrar al grupo"
-              icon="pi pi-arrow-right"
-              iconPos="right"
-              styleClass="w-full"
-              (onClick)="goToGroupView(group.id)"
-            />
-            <p-button
-              label="Crear ticket"
-              icon="pi pi-plus"
-              severity="secondary"
-              styleClass="w-full"
-              (onClick)="openCreateTicket(group.id)"
-            />
-          </div>
-        </ng-template>
-      </p-card>
-    }
-  </div>
-</section>
+          <ng-template pTemplate="footer">
+            <div class="group-card-actions">
+              <p-button
+                label="Entrar al grupo"
+                icon="pi pi-arrow-right"
+                iconPos="right"
+                styleClass="w-full"
+                (onClick)="goToGroupView(group.id)"
+              />
+              @if (canCreateTickets) {
+                <p-button
+                  label="Crear ticket"
+                  icon="pi pi-plus"
+                  severity="secondary"
+                  styleClass="w-full"
+                  (onClick)="openCreateTicket(group.id)"
+                />
+              }
+            </div>
+          </ng-template>
+        </p-card>
+      }
+    </div>
+  </section>
+} @else {
+  <section class="groups-section">
+    <h2 class="section-title">Tus grupos</h2>
+    <p>No cuentas con permisos para acceder al modulo de grupos.</p>
+  </section>
+}

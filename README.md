@@ -1,6 +1,6 @@
 # Practica_2
 
-Aplicación Angular + PrimeNG para gestión de tickets por grupos con navegación responsive, tablero Kanban, lista, perfil de usuario y administración de permisos.
+Aplicación Angular + PrimeNG para gestión de tickets por grupos con navegación responsive, tablero Kanban, lista, perfil de usuario, administración de permisos y control de cuentas activas/inactivas.
 
 ## Estado actual
 
@@ -41,6 +41,9 @@ Rutas en `src/app/app.routes.ts`.
 
 - Login con credenciales demo y persistencia de usuario actual en `auth.currentUser`.
 - Registro con validaciones de email, teléfono, contraseña robusta y mayoría de edad.
+- Bloqueo de acceso para cuentas desactivadas:
+	- Se impide iniciar sesión si el usuario está inactivo.
+	- Si un usuario es desactivado con sesión activa, los guards cierran su sesión y redirigen a `/login`.
 
 ### 2) Dashboard
 
@@ -78,7 +81,7 @@ Ubicación: `src/app/pages/group/`
 	- Descripción
 	- Estado inicial (default: `Pendiente`)
 	- Asignado a (opcional)
-	- Prioridad (7 niveles en chino)
+	- Prioridad (7 niveles en español)
 	- Fechas de creación y límite
 - Se abre desde Dashboard o Grupo.
 - Al crear:
@@ -122,46 +125,63 @@ Ubicación: `src/app/pages/user/`
 
 - Usuario `superAdmin` preconfigurado con todos los permisos.
 - CRUD de usuarios.
+- Activación / desactivación de usuarios.
 - Gestión de permisos por usuario:
 	- agregar/quitar permisos individuales
 	- agregar todos / quitar todos
 
 Permisos soportados:
 
-- `group:add`, `group:edit`, `group:delete`
-- `ticket:create`, `ticket:edit`, `ticket:delete`
-- `user:create`, `user:edit`, `user:delete`, `user:permissions`
+- Ticket:
+	- `ticket:add`, `ticket:view`, `ticket:edit`, `ticket:edit:status`, `ticket:edit:comment`, `ticket:edit:priority`, `ticket:edit:deadline`, `ticket:edit:assign`, `ticket:delete`
+- Group:
+	- `group:add`, `group:view`, `group:edit`, `group:remove`, `group:add:members`, `group:remove:members`
+- User:
+	- `user:add`, `user:view:all`, `user:edit`, `user:remove`, `user:edit:permissions`, `user:deactivate`, `user:activate`
 
 Acceso a secciones admin de usuarios:
 
-- Controlado por permisos CRUD de usuario (`user:create`, `user:edit`, `user:delete`)
-- Gestión de permisos controlada por `user:permissions`
+- Controlado por permisos de administración (`user:view:all`, `user:add`, `user:edit`, `user:remove`, `user:edit:permissions`, `user:activate`, `user:deactivate`)
+- Gestión de permisos controlada por `user:edit:permissions`
 
 ## Reglas de permisos actuales
 
 ### Tickets
 
-- Creador/Admin: puede editar campos y reasignar.
-- Asignado: puede cambiar estado y comentar.
+- `ticket:add`: crear tickets.
+- `ticket:view`: visualizar tickets.
+- `ticket:edit`: edición completa de ticket.
+- `ticket:edit:status`: cambiar estado.
+- `ticket:edit:comment`: agregar comentarios.
+- `ticket:edit:priority`: cambiar prioridad.
+- `ticket:edit:deadline`: cambiar fecha límite.
+- `ticket:edit:assign`: reasignar ticket.
+- `ticket:delete`: eliminar tickets.
 - Cambios se registran en historial.
 
 ### Grupo
 
-- `group:add`: crear grupo y agregar miembros.
+- `group:view`: visualizar sección de grupos.
+- `group:add`: crear grupo.
 - `group:edit`: editar nombre del grupo.
-- `group:delete`: eliminar miembros y eliminar grupo.
+- `group:remove`: eliminar grupo.
+- `group:add:members`: agregar miembros.
+- `group:remove:members`: remover miembros.
 
 ### Usuarios
 
-- `user:create`: crear usuarios.
+- `user:add`: crear usuarios.
+- `user:view:all`: ver listado completo.
 - `user:edit`: editar usuarios.
-- `user:delete`: eliminar usuarios (excepto superAdmin y usuario activo).
-- `user:permissions`: administrar permisos por usuario.
+- `user:remove`: eliminar usuarios (excepto superAdmin y usuario activo).
+- `user:edit:permissions`: administrar permisos por usuario.
+- `user:deactivate`: desactivar cuentas.
+- `user:activate`: activar cuentas.
 
 ## LocalStorage
 
 - `auth.currentUser`: usuario autenticado actual.
-- `crud.users`: catálogo de usuarios.
+- `crud.users`: catálogo de usuarios (incluye estado `isActive`).
 - `crud.user.permissions`: permisos por usuario.
 - `crud.groups`: grupos.
 - `board.group.permissions`: permisos por grupo.
@@ -203,9 +223,24 @@ src/
 
 - No hay backend real ni base de datos remota.
 - Autenticación/roles persisten en localStorage (entorno demo).
-- No hay route guards formales por permiso (las validaciones son por vista/acción).
+- Control de acceso dependiente de información local (localStorage), sin validación server-side.
 
 ## Historial de cambios
+
+### v1.8 — Marzo 2026
+
+#### Seguridad y autorización
+- Implementación de `authGuard` y `permissionGuard` para proteger rutas privadas.
+- Normalización del modelo mínimo de permisos en dominios Ticket, Group y User.
+- Migración de permisos legacy almacenados en localStorage para mantener compatibilidad.
+
+#### Gestión de usuarios
+- Estado `isActive` por usuario en `crud.users`.
+- Botón PrimeNG para `Activar/Desactivar` en listado de usuarios.
+- Bloqueo de login para cuentas desactivadas.
+- Expulsión de sesión cuando una cuenta activa es desactivada posteriormente.
+
+---
 
 ### v1.7 — Julio 2025
 
@@ -261,3 +296,6 @@ src/
 - Métodos `persist*` unificados en un helper `persist(key, value)` de 2 líneas.
 - `isTicketCreator` / `isTicketAssignee` fusionados en `matchesCurrentUser(ticket, field)`.
 - `startOfDay` / `endOfDay` / `toDate` / `normalizeBirthDate` reducidos a one-liners.
+
+una base de datos que cumpla con las queris para completar, mostrar y verificar acciones del login
+dvuelve id usuario correo fecha del login y permisos

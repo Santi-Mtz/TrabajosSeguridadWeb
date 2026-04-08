@@ -4,7 +4,7 @@
   }
 
   @if (!canManageUsers) {
-    <p-message severity="warn" text="La gestión avanzada requiere permisos user:create, user:edit y user:delete." />
+    <p-message severity="warn" text="La gestión avanzada está restringida. Tu perfil requiere permisos de administración de usuarios para habilitar estas acciones." />
   }
 
   <article class="profile-layout">
@@ -130,7 +130,7 @@
 
             <ng-template pTemplate="body" let-permission>
               <tr>
-                <td>{{ permission }}</td>
+                <td>{{ permissionDisplayName(permission) }}</td>
                 <td>
                   <p-tag [value]="hasPermission(permission) ? 'Activo' : 'Inactivo'" [severity]="hasPermission(permission) ? 'success' : 'secondary'" />
                 </td>
@@ -159,8 +159,9 @@
             <th scope="col">Usuario</th>
             <th scope="col">Nombre</th>
             <th scope="col">Correo</th>
-            <th scope="col">Permisos</th>
+            <th scope="col">Rol</th>
             <th scope="col">Equipo</th>
+            <th scope="col">Estado</th>
             <th scope="col">Acciones</th>
           </tr>
         </ng-template>
@@ -174,6 +175,9 @@
             <td>{{ user.role }}</td>
             <td>{{ user.team }}</td>
             <td>
+              <p-tag [value]="user.isActive ? 'Activo' : 'Inactivo'" [severity]="user.isActive ? 'success' : 'secondary'" />
+            </td>
+            <td>
               <p-button label="Editar" size="small" severity="secondary" (onClick)="editUserRecord(user)" />
               <p-button
                 label="Eliminar"
@@ -181,6 +185,14 @@
                 severity="danger"
                 (onClick)="deleteUserRecord(user)"
                 [disabled]="user.username === 'superAdmin' || !canDeleteUsers"
+              />
+              <p-button
+                [label]="user.isActive ? 'Desactivar' : 'Activar'"
+                [icon]="user.isActive ? 'pi pi-power-off' : 'pi pi-check-circle'"
+                size="small"
+                [severity]="user.isActive ? 'warn' : 'success'"
+                (onClick)="toggleUserActive(user)"
+                [disabled]="(user.isActive && !canDeactivateUsers) || (!user.isActive && !canActivateUsers)"
               />
             </td>
           </tr>

@@ -23,7 +23,9 @@
     <div class="top-row-spacer"></div>
 
     <p-button label="Perfil usuario" icon="pi pi-user" severity="secondary" (onClick)="openUserProfile()" />
-    <p-button label="Gestión usuarios" icon="pi pi-users" severity="secondary" (onClick)="openUserManagement()" />
+    @if (canOpenUserManagement) {
+      <p-button label="Gestión de usuarios" icon="pi pi-users" severity="secondary" (onClick)="openUserManagement()" />
+    }
   </div>
 
   <div class="group-overview-row">
@@ -42,7 +44,9 @@
   </div>
 
   <div class="top-actions-row">
-    <p-button label="Crear ticket" icon="pi pi-plus" (onClick)="openCreateDialog()" />
+    @if (canCreateTickets) {
+      <p-button label="Crear ticket" icon="pi pi-plus" (onClick)="openCreateDialog()" />
+    }
     @if (canCreateGroup) {
       <p-button
         [label]="showCreateGroupForm ? 'Cancelar grupo' : 'Nuevo grupo'"
@@ -125,7 +129,7 @@
   </div>
 
   @if (!hasGroupAdminAccess) {
-    <p-message severity="warn" text="No tienes permisos group:add, group:edit o group:delete para administrar este grupo." />
+    <p-message severity="warn" text="Tu perfil no cuenta con permisos administrativos para este grupo." />
   }
 
   <div class="member-manage-row">
@@ -144,7 +148,7 @@
       <tr>
         <td>{{ member }}</td>
         <td>
-          <p-button label="Eliminar" severity="danger" size="small" (onClick)="removeMember(member)" [disabled]="!canDeleteGroup" />
+          <p-button label="Eliminar" severity="danger" size="small" (onClick)="removeMember(member)" [disabled]="!canRemoveGroupMembers" />
         </td>
       </tr>
     </ng-template>

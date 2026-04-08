@@ -8,6 +8,7 @@ import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthSessionService, AuthSessionUser } from '../../services/auth-session.service';
+import { AuthorizationService } from '../../services/authorization.service';
 import { StorageService } from '../../services/storage.service';
 
 type TicketStatus = 'Pendiente' | 'En progreso' | 'Revisión' | 'Bloqueado' | 'Hecho';
@@ -43,7 +44,8 @@ export class DashboardComponent implements OnInit {
   constructor(
     private readonly router: Router,
     private readonly storage: StorageService,
-    private readonly authSession: AuthSessionService
+    private readonly authSession: AuthSessionService,
+    private readonly authorization: AuthorizationService
   ) {}
 
   private readonly ticketsStorageKey = 'board.tickets';
@@ -164,6 +166,14 @@ export class DashboardComponent implements OnInit {
     return this.groups.find((group) => group.id === this.selectedGroupId)?.name ?? 'Grupo';
   }
 
+  get canAccessGroup(): boolean {
+    return this.authorization.canAccessGroupSection();
+  }
+
+  get canCreateTickets(): boolean {
+    return this.authorization.canCreateTickets();
+  }
+
   get recentTicketsForSelectedGroup(): TicketRecord[] {
     if (this.selectedGroupId === null) {
       return [];
@@ -197,6 +207,10 @@ export class DashboardComponent implements OnInit {
   }
 
   goToGroupView(groupId?: number): void {
+    if (!this.canAccessGroup) {
+      return;
+    }
+
     const id = groupId ?? this.selectedGroupId;
     if (id === null || id === undefined) {
       return;
@@ -206,6 +220,10 @@ export class DashboardComponent implements OnInit {
   }
 
   openCreateTicket(groupId: number): void {
+    if (!this.canAccessGroup || !this.canCreateTickets) {
+      return;
+    }
+
     void this.router.navigate(['/group'], { queryParams: { groupId, createTicket: 1 } });
   }
 

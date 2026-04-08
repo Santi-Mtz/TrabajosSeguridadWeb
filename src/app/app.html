@@ -18,14 +18,16 @@
           (onClick)="navigateTo('/dashboard')"
         />
 
-        <p-button
-          label="Group"
-          icon="pi pi-users"
-          [text]="!isActive('/group')"
-          [severity]="isActive('/group') ? 'contrast' : undefined"
-          [rounded]="true"
-          (onClick)="navigateTo('/group')"
-        />
+        @if (canOpenGroup) {
+          <p-button
+            label="Group"
+            icon="pi pi-users"
+            [text]="!isActive('/group')"
+            [severity]="isActive('/group') ? 'contrast' : undefined"
+            [rounded]="true"
+            (onClick)="navigateTo('/group')"
+          />
+        }
 
         <p-button
           label="User"
@@ -75,14 +77,16 @@
       (onClick)="navigateTo('/dashboard')"
     />
 
-    <p-button
-      label="Group"
-      icon="pi pi-users"
-      [text]="!isActive('/group')"
-      [severity]="isActive('/group') ? 'contrast' : undefined"
-      [rounded]="true"
-      (onClick)="navigateTo('/group')"
-    />
+    @if (canOpenGroup) {
+      <p-button
+        label="Group"
+        icon="pi pi-users"
+        [text]="!isActive('/group')"
+        [severity]="isActive('/group') ? 'contrast' : undefined"
+        [rounded]="true"
+        (onClick)="navigateTo('/group')"
+      />
+    }
 
     <p-button
       label="User"

@@ -9,6 +9,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
 import { MessageModule } from 'primeng/message';
 import { AuthSessionService } from '../../services/auth-session.service';
+import { AccountAccessService } from '../../services/account-access.service';
 import { AuthShellComponent } from '../../components/auth-shell/auth-shell.component';
 import { ValidationService } from '../../services/validation.service';
 
@@ -34,6 +35,7 @@ export class LoginComponent {
   constructor(
     private readonly router: Router,
     private readonly authSession: AuthSessionService,
+    private readonly accountAccess: AccountAccessService,
     private readonly validation: ValidationService
   ) {}
 
@@ -73,7 +75,7 @@ export class LoginComponent {
     const password = this.passwordValue.trim();
 
     if (!this.validation.isValidEmail(email)) {
-      this.loginError = 'Ingresa un correo válido.';
+      this.loginError = 'Por favor, ingresa una dirección de correo electrónico válida.';
       return;
     }
 
@@ -82,16 +84,21 @@ export class LoginComponent {
     );
 
     if (matchedCredential) {
+      if (!this.accountAccess.isUserActive(email)) {
+        this.loginError = 'Tu cuenta se encuentra desactivada. Contacta a un administrador para solicitar su activación.';
+        return;
+      }
+
       this.authSession.setCurrentUser({
         email,
         displayName: matchedCredential.displayName
       });
 
-      this.loginSuccess = 'Credenciales válidas. Inicio de sesión correcto.';
+      this.loginSuccess = 'Inicio de sesión exitoso. Redirigiendo al panel principal.';
       void this.router.navigate(['/dashboard']);
       return;
     }
 
-    this.loginError = 'Credenciales inválidas. Verifica el correo y la contraseña.';
+    this.loginError = 'No fue posible iniciar sesión. Verifica tu correo y contraseña e intenta nuevamente.';
   }
 }
