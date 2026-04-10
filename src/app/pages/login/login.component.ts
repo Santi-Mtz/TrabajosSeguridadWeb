@@ -9,9 +9,25 @@ import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
 import { MessageModule } from 'primeng/message';
 import { AuthSessionService } from '../../services/auth-session.service';
-import { AccountAccessService } from '../../services/account-access.service';
 import { AuthShellComponent } from '../../components/auth-shell/auth-shell.component';
 import { ValidationService } from '../../services/validation.service';
+import { StorageService } from '../../services/storage.service';
+import { AppPermission } from '../../services/authorization.service';
+
+type LoginApiData = {
+  id: number;
+  username: string;
+  email: string;
+  login_date: string;
+  permissions: string[];
+};
+
+type LoginApiResponse = {
+  statusCode: number;
+  intOpCode: string;
+  message: string;
+  data: LoginApiData | null;
+};
 
 @Component({
   selector: 'app-login',
@@ -32,42 +48,28 @@ import { ValidationService } from '../../services/validation.service';
   styleUrl: './login.component.css'
 })
 export class LoginComponent {
+  private readonly gatewayLoginUrl = 'http://localhost:3000/auth/login';
+  private readonly permissionsStorageKey = 'crud.user.permissions';
+
   constructor(
     private readonly router: Router,
     private readonly authSession: AuthSessionService,
-    private readonly accountAccess: AccountAccessService,
-    private readonly validation: ValidationService
+    private readonly validation: ValidationService,
+    private readonly storage: StorageService
   ) {}
 
   email = '';
   passwordValue = '';
+  isSubmitting = false;
 
   loginError = '';
   loginSuccess = '';
-
-  private readonly validCredentials = [
-    {
-      email: 'admin@seguridadweb.com',
-      password: 'Admin@12345',
-      displayName: 'Administrador'
-    },
-    {
-      email: 'superadmin@seguridadweb.com',
-      password: 'Admin@12345',
-      displayName: 'superAdmin'
-    },
-    {
-      email: 'santiago.martinez@example.com',
-      password: 'Admin@12345',
-      displayName: 'Santiago Martinez'
-    }
-  ];
 
   get canSubmit(): boolean {
     return this.validation.isValidEmail(this.email) && this.passwordValue.trim().length > 0;
   }
 
-  onLogin(): void {
+  async onLogin(): Promise<void> {
     this.loginError = '';
     this.loginSuccess = '';
 
@@ -79,26 +81,43 @@ export class LoginComponent {
       return;
     }
 
-    const matchedCredential = this.validCredentials.find((credential) =>
-      credential.email.toLowerCase() === email && credential.password === password
-    );
+    this.isSubmitting = true;
 
-    if (matchedCredential) {
-      if (!this.accountAccess.isUserActive(email)) {
-        this.loginError = 'Tu cuenta se encuentra desactivada. Contacta a un administrador para solicitar su activación.';
+    try {
+      const response = await fetch(this.gatewayLoginUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password })
+      });
+
+      const payload = await response.json() as LoginApiResponse;
+      if (!response.ok || !payload.data) {
+        this.loginError = payload.message || 'No fue posible iniciar sesión. Verifica tu correo y contraseña e intenta nuevamente.';
         return;
       }
 
+      const permissions = payload.data.permissions.filter((permission): permission is AppPermission =>
+        typeof permission === 'string'
+      );
+
+      const existingMap = this.storage.getJson<Record<string, AppPermission[]>>(this.permissionsStorageKey) ?? {};
+      existingMap[email] = permissions;
+      this.storage.setJson(this.permissionsStorageKey, existingMap);
+
       this.authSession.setCurrentUser({
-        email,
-        displayName: matchedCredential.displayName
+        email: payload.data.email,
+        displayName: payload.data.username
       });
 
       this.loginSuccess = 'Inicio de sesión exitoso. Redirigiendo al panel principal.';
-      void this.router.navigate(['/dashboard']);
+      await this.router.navigate(['/dashboard']);
       return;
+    } catch {
+      this.loginError = 'No fue posible contactar el servicio de autenticación. Intenta nuevamente.';
+    } finally {
+      this.isSubmitting = false;
     }
-
-    this.loginError = 'No fue posible iniciar sesión. Verifica tu correo y contraseña e intenta nuevamente.';
   }
 }

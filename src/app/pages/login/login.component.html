@@ -10,7 +10,7 @@
     <p-password styleClass="password-field" [(ngModel)]="passwordValue" [toggleMask]="true" />
 
     <footer class="submit-action">
-      <p-button label="Entrar" [disabled]="!canSubmit" (onClick)="onLogin()" />
+      <p-button label="Entrar" [disabled]="!canSubmit || isSubmitting" [loading]="isSubmitting" (onClick)="onLogin()" />
     </footer>
 
     @if (loginError) {
