@@ -216,12 +216,13 @@ src/
 Se agrego una base minima para login end-to-end:
 
 - `backend/api-gateway` (Fastify, puerto `3000`)
-- `backend/user-service` (Fastify + PostgreSQL, puerto `3001`)
+- `backend/user-service` (NestJS + PostgreSQL, puerto `3001`)
+- `backend/group-service` (NestJS, puerto `3003`)
 
 ### Flujo
 
 - Frontend -> `POST /auth/login` en Gateway
-- Gateway valida JSON Schema y reenvia a User Service
+- Gateway valida JSON Schema y reenvia a User Service (NestJS)
 - User Service valida credenciales contra PostgreSQL, registra `login_events` y responde contrato estandar
 
 ### Contrato de respuesta
@@ -245,12 +246,15 @@ Se agrego una base minima para login end-to-end:
 
 1. Copiar variables de entorno:
 	 - `backend/user-service/.env.example` -> `backend/user-service/.env`
+	 - `backend/group-service/.env.example` -> `backend/group-service/.env`
 	 - `backend/api-gateway/.env.example` -> `backend/api-gateway/.env`
 2. Instalar dependencias por servicio:
 	 - `cd backend/user-service && npm install`
+	 - `cd backend/group-service && npm install`
 	 - `cd backend/api-gateway && npm install`
 3. Ejecutar servicios:
 	 - `cd backend/user-service && npm run dev`
+	 - `cd backend/group-service && npm run dev`
 	 - `cd backend/api-gateway && npm run dev`
 
 ### Probar login
@@ -275,7 +279,7 @@ Content-Type: application/json
 - `USR_LOGIN_ERROR`: error interno en user-service.
 - `GW_UPSTREAM_ERROR`: gateway no pudo contactar user-service.
 
-### Pruebas de aceptacion Fastify
+### Pruebas de aceptacion login
 
 1. Login valido (`200`):
 	- `email`: `admin_actualizado@correo.com`

@@ -46,6 +46,7 @@ public/favicon.ico
 # Backend env files
 backend/**/.env
 backend/**/node_modules/
+backend/**/dist/
 
 # Local DB dump files
 schema.sql
