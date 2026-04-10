@@ -13,6 +13,7 @@ import { AuthShellComponent } from '../../components/auth-shell/auth-shell.compo
 import { ValidationService } from '../../services/validation.service';
 import { StorageService } from '../../services/storage.service';
 import { AppPermission } from '../../services/authorization.service';
+import { environment } from '../../../environments/environment';
 
 type LoginApiData = {
   id: number;
@@ -48,7 +49,7 @@ type LoginApiResponse = {
   styleUrl: './login.component.css'
 })
 export class LoginComponent {
-  private readonly gatewayLoginUrl = 'http://localhost:3000/auth/login';
+  private readonly gatewayLoginUrl = `${environment.apiGatewayUrl}/auth/login`;
   private readonly permissionsStorageKey = 'crud.user.permissions';
 
   constructor(
