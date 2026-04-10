@@ -130,16 +130,14 @@ export class GroupComponent implements OnInit {
   detailForm: TicketFormModel = createEmptyTicketForm();
 
   ngOnInit(): void {
-    const initialState = this.groupBoardData.createInitialState();
-    this.groups = initialState.groups;
-    this.tickets = initialState.tickets;
-    this.membersByGroup = initialState.membersByGroup;
-    this.permissionsByGroup = initialState.permissionsByGroup;
+    this.groups = [];
+    this.tickets = [];
+    this.membersByGroup = {};
+    this.permissionsByGroup = {};
 
     this.loadCurrentUser();
     void this.loadGroups();
     void this.loadTickets();
-    void this.loadMembers(this.selectedGroupId);
     this.syncGroupFromQueryParam();
     this.groupNameForm = this.selectedGroupName;
   }
@@ -411,28 +409,30 @@ export class GroupComponent implements OnInit {
       return;
     }
 
-    this.tickets = this.tickets.map((t) => {
-      if (t.id !== ticket.id) {
-        return t;
-      }
-
-      return {
-        ...t,
-        status: targetStatus,
-        history: [
-          ...t.history,
-          `${this.currentUser.displayName} cambió el estado a "${targetStatus}" (${new Date().toLocaleString()})`
-        ]
-      };
-    });
-
     try {
       await this.workboardApi.updateTicket(ticket.id, {
         status: this.mapStatusToApi(targetStatus),
-        assigned_to: this.resolveAssignedUserId(ticket.assignedTo)
+        assigned_to: this.resolveAssignedUserId(ticket.assignedTo),
+        updated_by: this.currentUser.id ?? 1
       });
-    } catch {
-      // Keep the local update if the backend is temporarily unavailable.
+
+      this.tickets = this.tickets.map((t) => {
+        if (t.id !== ticket.id) {
+          return t;
+        }
+
+        return {
+          ...t,
+          status: targetStatus,
+          history: [
+            ...t.history,
+            `${this.currentUser.displayName} cambió el estado a "${targetStatus}" (${new Date().toLocaleString()})`
+          ]
+        };
+      });
+    } catch (error) {
+      this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible actualizar el ticket en la base de datos.');
+      return;
     }
 
     this.syncGroupMetrics();
@@ -469,7 +469,6 @@ export class GroupComponent implements OnInit {
 
     const author = this.currentUser.displayName || this.currentUser.email;
     const memberEmail = this.currentUser.email.trim().toLowerCase();
-    let nextId = this.groups.length ? Math.max(...this.groups.map((group) => group.id)) + 1 : 1;
 
     try {
       const createdGroup = await this.workboardApi.createGroup({
@@ -477,37 +476,38 @@ export class GroupComponent implements OnInit {
         description: 'Grupo creado desde el frontend',
         created_by: this.currentUser.id ?? 1
       });
-      nextId = createdGroup.id;
-    } catch {
-      // Keep the locally generated id when the backend request fails.
+      const nextId = createdGroup.id;
+      const newGroup: GroupRecord = {
+        id: nextId,
+        name,
+        category: 'Workspace',
+        level: 'Custom',
+        author,
+        members: 1,
+        tickets: 0
+      };
+
+      this.groups = [...this.groups, newGroup];
+      this.membersByGroup[nextId] = [memberEmail];
+      this.permissionsByGroup[nextId] = {
+        'group:add': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com'],
+        'group:view': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com'],
+        'group:edit': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com'],
+        'group:remove': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com'],
+        'group:add:members': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com'],
+        'group:remove:members': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com']
+      };
+
+      this.selectedGroupId = nextId;
+      this.groupNameForm = name;
+      this.newGroupName = '';
+      this.showCreateGroupForm = false;
+      this.pushNotification('success', 'Operación completada', 'El grupo se creó correctamente.');
+      return;
+    } catch (error) {
+      this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible crear el grupo en la base de datos.');
+      return;
     }
-
-    const newGroup: GroupRecord = {
-      id: nextId,
-      name,
-      category: 'Workspace',
-      level: 'Custom',
-      author,
-      members: 1,
-      tickets: 0
-    };
-
-    this.groups = [...this.groups, newGroup];
-    this.membersByGroup[nextId] = [memberEmail];
-    this.permissionsByGroup[nextId] = {
-      'group:add': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com'],
-      'group:view': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com'],
-      'group:edit': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com'],
-      'group:remove': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com'],
-      'group:add:members': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com'],
-      'group:remove:members': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com']
-    };
-
-    this.selectedGroupId = nextId;
-    this.groupNameForm = name;
-    this.newGroupName = '';
-    this.showCreateGroupForm = false;
-    this.pushNotification('success', 'Operación completada', 'El grupo se creó correctamente.');
   }
 
   async saveGroupSettings(): Promise<void> {
@@ -538,8 +538,9 @@ export class GroupComponent implements OnInit {
         name,
         description: 'Grupo actualizado desde el frontend'
       });
-    } catch {
-      // Keep the local update if the backend request fails.
+    } catch (error) {
+      this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible actualizar el grupo en la base de datos.');
+      return;
     }
 
     this.groups = this.groups.map((group) =>
@@ -575,8 +576,9 @@ export class GroupComponent implements OnInit {
 
     try {
       await this.workboardApi.deleteGroup(deletedGroupId);
-    } catch {
-      // Keep local cleanup even if backend deletion fails.
+    } catch (error) {
+      this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible eliminar el grupo de la base de datos.');
+      return;
     }
 
     this.groups = this.groups.filter((group) => group.id !== deletedGroupId);
@@ -635,39 +637,44 @@ export class GroupComponent implements OnInit {
       return;
     }
 
-    const newTicket = result.ticket;
-
     try {
       const createdTicket = await this.workboardApi.createTicket({
-        title: newTicket.title,
-        description: newTicket.description,
-        status: this.mapStatusToApi(newTicket.status),
-        group_id: newTicket.groupId,
-        assigned_to: this.resolveAssignedUserId(newTicket.assignedTo),
+        title: result.ticket.title,
+        description: result.ticket.description,
+        status: this.mapStatusToApi(result.ticket.status),
+        group_id: result.ticket.groupId,
+        assigned_to: this.resolveAssignedUserId(result.ticket.assignedTo),
         created_by: this.currentUser.id ?? 1
       });
 
-      newTicket.id = createdTicket.id;
-    } catch {
-      // If backend creation fails, keep the optimistic local ticket.
-    }
+      const newTicket = {
+        ...result.ticket,
+        id: createdTicket.id
+      };
 
-    this.tickets = [...this.tickets, newTicket];
-    this.syncGroupMetrics();
-    this.createDialogVisible = false;
-    this.selectedTicket = newTicket;
-    this.detailForm = createFormFromTicket(newTicket);
-    this.detailComment = '';
-    this.detailDialogVisible = true;
-    this.pushNotification('success', 'Operación completada', 'El ticket se creó correctamente.');
+      this.tickets = [...this.tickets, newTicket];
+      this.syncGroupMetrics();
+      this.createDialogVisible = false;
+      this.selectedTicket = newTicket;
+      this.detailForm = createFormFromTicket(newTicket);
+      this.detailComment = '';
+      this.detailDialogVisible = true;
+      await this.syncTicketActivity(newTicket.id);
+      this.pushNotification('success', 'Operación completada', 'El ticket se creó correctamente.');
+      return;
+    } catch (error) {
+      this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible crear el ticket en la base de datos.');
+      return;
+    }
   }
 
-  openTicketDetail(ticket: TicketRecord): void {
+  async openTicketDetail(ticket: TicketRecord): Promise<void> {
     this.notification = null;
     this.selectedTicket = ticket;
     this.detailForm = createFormFromTicket(ticket);
     this.detailComment = '';
     this.detailDialogVisible = true;
+    await this.syncTicketActivity(ticket.id);
   }
 
   async saveTicketDetail(): Promise<void> {
@@ -716,15 +723,18 @@ export class GroupComponent implements OnInit {
         title: nextTicket.title,
         description: nextTicket.description,
         status: this.mapStatusToApi(nextTicket.status),
-        assigned_to: this.resolveAssignedUserId(nextTicket.assignedTo)
+        assigned_to: this.resolveAssignedUserId(nextTicket.assignedTo),
+        updated_by: this.currentUser.id ?? 1
       });
 
       nextTicket.id = updatedTicket.id;
-    } catch {
-      // Keep the local update if backend persistence fails.
+    } catch (error) {
+      this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible actualizar el ticket en la base de datos.');
+      return;
     }
 
     this.updateTicket(nextTicket);
+    await this.syncTicketActivity(nextTicket.id);
     this.pushNotification('success', 'Operación completada', 'El ticket se actualizó correctamente.');
   }
 
@@ -736,7 +746,7 @@ export class GroupComponent implements OnInit {
     this.detailForm.assignedTo = this.currentUser.email;
   }
 
-  addCommentToTicket(): void {
+  async addCommentToTicket(): Promise<void> {
     if (!this.selectedTicket) {
       return;
     }
@@ -752,19 +762,14 @@ export class GroupComponent implements OnInit {
       return;
     }
 
-    const updated = this.groupTicketFacade.appendComment(
-      this.tickets,
-      this.selectedTicket.id,
-      comment,
-      this.currentUser.displayName
-    );
-
-    this.tickets = updated.tickets;
-
-    this.selectedTicket = updated.selectedTicket;
-    if (this.selectedTicket) {
-      this.detailForm = createFormFromTicket(this.selectedTicket);
+    try {
+      await this.workboardApi.addTicketComment(this.selectedTicket.id, comment, this.currentUser.id ?? 1);
+      await this.syncTicketActivity(this.selectedTicket.id);
+    } catch (error) {
+      this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible agregar el comentario.');
+      return;
     }
+
     this.detailComment = '';
     this.pushNotification('success', 'Operación completada', 'El comentario se agregó al ticket correctamente.');
   }
@@ -832,55 +837,54 @@ export class GroupComponent implements OnInit {
   private async loadGroups(): Promise<void> {
     try {
       const apiGroups = await this.workboardApi.listGroups();
-      if (apiGroups.length > 0) {
-        this.groups = apiGroups.map((group) => ({
-          id: group.id,
-          name: group.name,
-          category: 'General',
-          level: 'Backend',
-          author: group.created_by ? `Usuario #${group.created_by}` : 'Sistema',
-          members: this.membersByGroup[group.id]?.length ?? 0,
-          tickets: this.tickets.filter((ticket) => ticket.groupId === group.id).length
-        }));
+      this.groups = apiGroups.map((group) => ({
+        id: group.id,
+        name: group.name,
+        category: 'General',
+        level: 'Backend',
+        author: group.created_by ? `Usuario #${group.created_by}` : 'Sistema',
+        members: this.membersByGroup[group.id]?.length ?? 0,
+        tickets: this.tickets.filter((ticket) => ticket.groupId === group.id).length
+      }));
 
-        this.selectedGroupId = this.groups.some((group) => group.id === this.selectedGroupId)
-          ? this.selectedGroupId
-          : this.groups[0].id;
-        this.groupNameForm = this.selectedGroupName;
-        this.cdr.markForCheck();
-        return;
+      this.selectedGroupId = this.groups.some((group) => group.id === this.selectedGroupId)
+        ? this.selectedGroupId
+        : (this.groups[0]?.id ?? 0);
+      this.groupNameForm = this.selectedGroupName;
+
+      if (this.selectedGroupId > 0) {
+        await this.loadMembers(this.selectedGroupId);
       }
     } catch {
-      // fall back to local cache below
+      this.groups = [];
+      this.selectedGroupId = 0;
+      this.groupNameForm = this.selectedGroupName;
     }
+
     this.cdr.markForCheck();
   }
 
   private async loadTickets(): Promise<void> {
     try {
       const apiTickets = await this.workboardApi.listTickets();
-      if (apiTickets.length > 0) {
-        this.tickets = apiTickets.map((ticket, index) => ({
-          id: ticket.id,
-          groupId: ticket.group_id,
-          title: ticket.title,
-          description: ticket.description ?? '',
-          createdBy: ticket.created_by ? `Usuario #${ticket.created_by}` : this.currentUser.email,
-          status: this.normalizeTicketStatus(ticket.status),
-          assignedTo: ticket.assigned_to ? `Usuario #${ticket.assigned_to}` : '',
-          priority: 'Media',
-          createdAt: ticket.created_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
-          dueDate: ticket.updated_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
-          comments: [],
-          history: [`Sincronizado desde backend (${index + 1})`]
-        }));
-        this.syncGroupMetrics();
-        this.cdr.markForCheck();
-        return;
-      }
+      this.tickets = apiTickets.map((ticket, index) => ({
+        id: ticket.id,
+        groupId: ticket.group_id,
+        title: ticket.title,
+        description: ticket.description ?? '',
+        createdBy: ticket.created_by ? `Usuario #${ticket.created_by}` : this.currentUser.email,
+        status: this.normalizeTicketStatus(ticket.status),
+        assignedTo: ticket.assigned_to ? `Usuario #${ticket.assigned_to}` : '',
+        priority: 'Media',
+        createdAt: ticket.created_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+        dueDate: ticket.updated_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+        comments: [],
+        history: [`Sincronizado desde backend (${index + 1})`]
+      }));
     } catch {
-      // fall back to local cache below
+      this.tickets = [];
     }
+
     this.syncGroupMetrics();
     this.cdr.markForCheck();
   }
@@ -893,24 +897,23 @@ export class GroupComponent implements OnInit {
   }
 
   private async loadMembers(groupId: number): Promise<void> {
+    if (!groupId || groupId <= 0) {
+      return;
+    }
+
     try {
       const members = await this.workboardApi.listGroupMembers(groupId);
-      if (members.length > 0) {
-        this.membersByGroup = {
-          ...this.membersByGroup,
-          [groupId]: members.map((member) => member.email)
-        };
-        this.syncGroupMetrics();
-        this.cdr.markForCheck();
-        return;
-      }
+      this.membersByGroup = {
+        ...this.membersByGroup,
+        [groupId]: members.map((member) => member.email)
+      };
     } catch {
-      // fall back to local cache below
+      this.membersByGroup = {
+        ...this.membersByGroup,
+        [groupId]: []
+      };
     }
-    this.membersByGroup = {
-      ...this.membersByGroup,
-      [groupId]: this.membersByGroup[groupId] ?? []
-    };
+
     this.syncGroupMetrics();
     this.cdr.markForCheck();
   }
@@ -1013,6 +1016,43 @@ export class GroupComponent implements OnInit {
     this.syncGroupMetrics();
     this.selectedTicket = nextTicket;
     this.detailForm = createFormFromTicket(nextTicket);
+  }
+
+  private async syncTicketActivity(ticketId: number): Promise<void> {
+    try {
+      const activity = await this.workboardApi.getTicketActivity(ticketId);
+      this.tickets = this.tickets.map((ticket) => {
+        if (ticket.id !== ticketId) {
+          return ticket;
+        }
+
+        const comments = activity.comments.map((item) => {
+          const actor = item.created_by ? `Usuario #${item.created_by}` : 'Sistema';
+          const date = item.created_at ? new Date(item.created_at).toLocaleString() : '';
+          return date ? `${actor} (${date}): ${item.comment}` : `${actor}: ${item.comment}`;
+        });
+
+        const history = activity.history.map((item) => {
+          const date = item.created_at ? new Date(item.created_at).toLocaleString() : '';
+          return date ? `${item.event} (${date})` : item.event;
+        });
+
+        return {
+          ...ticket,
+          comments,
+          history: history.length > 0 ? history : ticket.history
+        };
+      });
+
+      const current = this.tickets.find((ticket) => ticket.id === ticketId) ?? null;
+      if (current) {
+        this.selectedTicket = current;
+      }
+
+      this.cdr.markForCheck();
+    } catch {
+      // Keep local details when backend activity endpoints are unavailable.
+    }
   }
 
   private matchesQuickFilter(ticket: TicketRecord): boolean {

@@ -9,7 +9,6 @@ import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthSessionService, AuthSessionUser } from '../../services/auth-session.service';
 import { AuthorizationService } from '../../services/authorization.service';
-import { StorageService } from '../../services/storage.service';
 import { WorkboardApiService } from '../../services/workboard-api.service';
 
 type TicketStatus = 'Pendiente' | 'En progreso' | 'Revisión' | 'Bloqueado' | 'Hecho';
@@ -45,14 +44,10 @@ export class DashboardComponent implements OnInit {
   constructor(
     private readonly router: Router,
     private readonly cdr: ChangeDetectorRef,
-    private readonly storage: StorageService,
     private readonly authSession: AuthSessionService,
     private readonly authorization: AuthorizationService,
     private readonly workboardApi: WorkboardApiService
   ) {}
-
-  private readonly ticketsStorageKey = 'board.tickets';
-  private readonly groupsStorageKey = 'crud.groups';
 
   readonly statuses: TicketStatus[] = ['Pendiente', 'En progreso', 'Revisión', 'Bloqueado', 'Hecho'];
 
@@ -132,6 +127,8 @@ export class DashboardComponent implements OnInit {
   ];
 
   ngOnInit(): void {
+    this.groups = [];
+    this.tickets = [];
     this.loadCurrentUser();
     void this.loadGroups();
     void this.loadTickets();
@@ -258,17 +255,12 @@ export class DashboardComponent implements OnInit {
         .map((group) => ({ id: group.id, name: group.name }))
         .sort((left, right) => left.id - right.id);
 
-      if (this.groups.length === 0) {
-        this.groups = [...this.defaultGroups];
-      }
-
       this.selectedGroupId = this.groups[0]?.id ?? null;
-      this.persistGroups(this.groups);
       this.cdr.markForCheck();
     } catch {
-      this.groups = [...this.defaultGroups];
+      this.groups = [];
       this.selectedGroupId = this.groups[0]?.id ?? null;
-      this.persistGroups(this.groups);
+      this.cdr.markForCheck();
     }
   }
 
@@ -296,15 +288,10 @@ export class DashboardComponent implements OnInit {
           ]
         }));
 
-      if (this.tickets.length === 0) {
-        this.tickets = [...this.defaultTickets];
-      }
-
-      this.persistTickets(this.tickets);
       this.cdr.markForCheck();
     } catch {
-      this.tickets = [...this.defaultTickets];
-      this.persistTickets(this.tickets);
+      this.tickets = [];
+      this.cdr.markForCheck();
     }
   }
 
@@ -333,13 +320,5 @@ export class DashboardComponent implements OnInit {
     }
 
     return `Usuario #${assignedTo}`;
-  }
-
-  private persistTickets(tickets: TicketRecord[]): void {
-    this.storage.setJson(this.ticketsStorageKey, tickets);
-  }
-
-  private persistGroups(groups: GroupOption[]): void {
-    this.storage.setJson(this.groupsStorageKey, groups);
   }
 }

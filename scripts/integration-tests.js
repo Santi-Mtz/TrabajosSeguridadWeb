@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 
-const groupBaseUrl = process.env.GROUP_SERVICE_URL || 'http://localhost:3003';
-const ticketBaseUrl = process.env.TICKET_SERVICE_URL || 'http://localhost:3002';
+const groupBaseUrl = process.env.GROUP_SERVICE_URL || 'http://127.0.0.1:3003';
+const ticketBaseUrl = process.env.TICKET_SERVICE_URL || 'http://127.0.0.1:3002';
 
 async function requestJson(url, init) {
   const headers = new Headers(init?.headers ?? undefined);
@@ -116,12 +116,33 @@ async function run() {
     method: 'PUT',
     body: JSON.stringify({
       title: `${createdTicketTitle} actualizado`,
-      status: 'done'
+      status: 'done',
+      updated_by: 1
     })
   });
   assert.equal(updatedTicket.response.status, 200);
   assert.equal(updatedTicket.payload.intOpCode, 'TKT_UPDATE_SUCCESS');
   summary.push('ticket updated ok');
+
+  const createdComment = await requestJson(`${ticketBaseUrl}/tickets/${ticketId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({
+      comment: 'Comentario de integracion',
+      created_by: 1
+    })
+  });
+  assert.equal(createdComment.response.status, 201);
+  assert.equal(createdComment.payload.intOpCode, 'TKT_COMMENT_CREATE_SUCCESS');
+  summary.push('ticket comment created ok');
+
+  const ticketActivity = await requestJson(`${ticketBaseUrl}/tickets/${ticketId}/activity`);
+  assert.equal(ticketActivity.response.status, 200);
+  assert.equal(ticketActivity.payload.intOpCode, 'TKT_ACTIVITY_GET_SUCCESS');
+  assert.ok(Array.isArray(ticketActivity.payload.data.comments));
+  assert.ok(Array.isArray(ticketActivity.payload.data.history));
+  assert.ok(ticketActivity.payload.data.comments.length > 0);
+  assert.ok(ticketActivity.payload.data.history.length > 0);
+  summary.push('ticket activity ok');
 
   const deletedTicket = await requestJson(`${ticketBaseUrl}/tickets/${ticketId}`, {
     method: 'DELETE'

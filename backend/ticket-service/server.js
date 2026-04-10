@@ -56,13 +56,29 @@ app.post('/tickets', async (request, reply) => {
 
 app.put('/tickets/:id', async (request, reply) => {
   const { id } = request.params;
-  const { title, description, status, assigned_to } = request.body;
+  const { title, description, status, assigned_to, updated_by } = request.body;
   const result = await ticketService.updateTicket(id, {
     title,
     description,
     status,
     assigned_to,
+    updated_by,
   });
+  return reply.status(result.statusCode).send(result);
+});
+
+app.post('/tickets/:id/comments', async (request, reply) => {
+  const { id } = request.params;
+  const result = await ticketService.addTicketComment(id, {
+    comment: request.body.comment,
+    created_by: request.body.created_by || null,
+  });
+  return reply.status(result.statusCode).send(result);
+});
+
+app.get('/tickets/:id/activity', async (request, reply) => {
+  const { id } = request.params;
+  const result = await ticketService.getTicketActivity(id);
   return reply.status(result.statusCode).send(result);
 });
 

@@ -35,6 +35,28 @@ export type ApiTicketWritePayload = {
   group_id: number;
   assigned_to?: number | null;
   created_by?: number;
+  updated_by?: number;
+};
+
+export type ApiTicketCommentRecord = {
+  id: number;
+  ticket_id: number;
+  created_by?: number | null;
+  comment: string;
+  created_at?: string;
+};
+
+export type ApiTicketHistoryRecord = {
+  id: number;
+  ticket_id: number;
+  actor_user_id?: number | null;
+  event: string;
+  created_at?: string;
+};
+
+export type ApiTicketActivityRecord = {
+  comments: ApiTicketCommentRecord[];
+  history: ApiTicketHistoryRecord[];
 };
 
 export type ApiGroupMemberRecord = {
@@ -43,6 +65,32 @@ export type ApiGroupMemberRecord = {
   email: string;
   is_active?: boolean;
   joined_at?: string;
+};
+
+export type ApiUserRecord = {
+  id: number;
+  username: string;
+  email: string;
+  is_active: boolean;
+  full_name?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  birth_date?: string | null;
+  role?: string | null;
+  team?: string | null;
+};
+
+export type ApiUserWritePayload = {
+  username: string;
+  email: string;
+  full_name?: string;
+  address?: string;
+  phone?: string;
+  birth_date?: string | null;
+  role?: string;
+  team?: string;
+  is_active?: boolean;
+  password?: string;
 };
 
 type ApiEnvelope<T> = {
@@ -56,8 +104,66 @@ type ApiEnvelope<T> = {
   providedIn: 'root'
 })
 export class WorkboardApiService {
+  private readonly userServiceUrl = `${environment.userServiceUrl}`;
   private readonly groupServiceUrl = `${environment.groupServiceUrl}`;
   private readonly ticketServiceUrl = `${environment.ticketServiceUrl}`;
+
+  async listUsers(): Promise<ApiUserRecord[]> {
+    const response = await this.request<ApiUserRecord[]>(`${this.userServiceUrl}/users`);
+    return Array.isArray(response.data) ? response.data : [];
+  }
+
+  async createUser(payload: ApiUserWritePayload): Promise<ApiUserRecord> {
+    const response = await this.request<ApiUserRecord>(`${this.userServiceUrl}/users`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.data) {
+      throw new Error(response.message || 'No fue posible crear el usuario.');
+    }
+
+    return response.data;
+  }
+
+  async updateUser(userId: number, payload: ApiUserWritePayload): Promise<ApiUserRecord> {
+    const response = await this.request<ApiUserRecord>(`${this.userServiceUrl}/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.data) {
+      throw new Error(response.message || 'No fue posible actualizar el usuario.');
+    }
+
+    return response.data;
+  }
+
+  async deleteUser(userId: number): Promise<void> {
+    await this.request<null>(`${this.userServiceUrl}/users/${userId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  async setUserActive(userId: number, isActive: boolean): Promise<void> {
+    await this.request<null>(`${this.userServiceUrl}/users/${userId}/active`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: isActive })
+    });
+  }
+
+  async getUserPermissions(userId: number): Promise<string[]> {
+    const response = await this.request<string[]>(`${this.userServiceUrl}/users/${userId}/permissions`);
+    return Array.isArray(response.data) ? response.data : [];
+  }
+
+  async setUserPermissions(userId: number, permissions: string[]): Promise<string[]> {
+    const response = await this.request<string[]>(`${this.userServiceUrl}/users/${userId}/permissions`, {
+      method: 'PUT',
+      body: JSON.stringify({ permissions })
+    });
+    return Array.isArray(response.data) ? response.data : [];
+  }
 
   async listGroups(): Promise<ApiGroupRecord[]> {
     const response = await this.request<ApiGroupRecord[]>(`${this.groupServiceUrl}/groups`);
@@ -155,6 +261,30 @@ export class WorkboardApiService {
     await this.request<null>(`${this.ticketServiceUrl}/tickets/${ticketId}`, {
       method: 'DELETE'
     });
+  }
+
+  async addTicketComment(ticketId: number, comment: string, createdBy?: number): Promise<ApiTicketCommentRecord> {
+    const response = await this.request<ApiTicketCommentRecord>(`${this.ticketServiceUrl}/tickets/${ticketId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({
+        comment,
+        created_by: createdBy
+      })
+    });
+
+    if (!response.data) {
+      throw new Error(response.message || 'No fue posible agregar el comentario.');
+    }
+
+    return response.data;
+  }
+
+  async getTicketActivity(ticketId: number): Promise<ApiTicketActivityRecord> {
+    const response = await this.request<ApiTicketActivityRecord>(`${this.ticketServiceUrl}/tickets/${ticketId}/activity`);
+    return {
+      comments: Array.isArray(response.data?.comments) ? response.data.comments : [],
+      history: Array.isArray(response.data?.history) ? response.data.history : []
+    };
   }
 
   private async request<T>(url: string, init?: RequestInit): Promise<ApiEnvelope<T>> {

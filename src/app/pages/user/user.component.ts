@@ -10,8 +10,8 @@ import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { AuthSessionService, AuthSessionUser } from '../../services/auth-session.service';
 import { AppPermission } from '../../services/authorization.service';
-import { StorageService } from '../../services/storage.service';
 import { ValidationService } from '../../services/validation.service';
+import { WorkboardApiService } from '../../services/workboard-api.service';
 import { UserFormComponent } from '../../components/user-form/user-form.component';
 
 type UserRecord = {
@@ -81,14 +81,10 @@ export class UserComponent implements OnInit {
   constructor(
     private readonly route: ActivatedRoute,
     private readonly cdr: ChangeDetectorRef,
-    private readonly storage: StorageService,
     private readonly authSession: AuthSessionService,
-    private readonly validation: ValidationService
+    private readonly validation: ValidationService,
+    private readonly workboardApi: WorkboardApiService
   ) {}
-
-  private readonly storageKey = 'crud.users';
-  private readonly ticketsStorageKey = 'board.tickets';
-  private readonly permissionsStorageKey = 'crud.user.permissions';
   private readonly superAdminEmail = 'superadmin@seguridadweb.com';
 
   readonly allPermissions: UserPermission[] = [
@@ -201,15 +197,18 @@ export class UserComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadCurrentUser();
-    this.loadUsers();
-    this.ensureSuperAdminUser();
-    this.loadPermissions();
-    this.ensurePermissionsForUsers();
-    this.loadTickets();
+    this.syncContextFromRoute();
+    void this.loadFromApi();
+  }
+
+  private async loadFromApi(): Promise<void> {
+    await this.loadUsers();
+    await this.loadPermissions();
+    await this.loadTickets();
     this.ensureCurrentProfile();
     this.resetUserCrudForm();
     this.selectedPermissionUserId = this.users[0]?.id ?? null;
-    this.syncContextFromRoute();
+    this.cdr.markForCheck();
   }
 
   get currentProfile(): UserFormModel {
@@ -301,11 +300,12 @@ export class UserComponent implements OnInit {
   get assignedTickets(): TicketRecord[] {
     const identity = this.currentUser.email.trim().toLowerCase();
     const displayName = this.currentUser.displayName.trim().toLowerCase();
+    const idTag = this.currentUser.id ? `usuario #${this.currentUser.id}` : '';
 
     return this.tickets
       .filter((ticket) => {
         const assigned = ticket.assignedTo.trim().toLowerCase();
-        return assigned === identity || assigned === displayName;
+        return assigned === identity || assigned === displayName || (idTag.length > 0 && assigned === idTag);
       })
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
@@ -360,7 +360,7 @@ export class UserComponent implements OnInit {
     return this.normalizeBirthDate(this.userCrudForm.birthDate);
   }
 
-  saveProfile(): void {
+  async saveProfile(): Promise<void> {
     this.notification = null;
 
     if (!this.isProfileValid) {
@@ -381,17 +381,28 @@ export class UserComponent implements OnInit {
       isActive: this.users.find((user) => user.id === this.profileForm.id)?.isActive ?? true
     };
 
-    const existingIndex = this.users.findIndex((user) => user.id === normalized.id || user.email === normalized.email);
+    try {
+      const saved = normalized.id > 0
+        ? await this.workboardApi.updateUser(normalized.id, this.toApiUserPayload(normalized))
+        : await this.workboardApi.createUser({
+          ...this.toApiUserPayload(normalized),
+          is_active: true
+        });
 
-    if (existingIndex >= 0) {
-      this.users = this.users.map((user, index) => (index === existingIndex ? normalized : user));
-    } else {
-      const nextId = this.users.length ? Math.max(...this.users.map((user) => user.id)) + 1 : 1;
-      this.users = [...this.users, { ...normalized, id: nextId }];
-      this.profileForm.id = nextId;
+      const savedUser = this.mapApiUserToView(saved);
+      const existingIndex = this.users.findIndex((user) => user.id === savedUser.id);
+
+      if (existingIndex >= 0) {
+        this.users = this.users.map((user, index) => (index === existingIndex ? savedUser : user));
+      } else {
+        this.users = [...this.users, savedUser];
+      }
+
+      this.profileForm.id = savedUser.id;
+    } catch (error) {
+      this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible guardar el perfil.');
+      return;
     }
-
-    this.persistUsers();
 
     this.authSession.setCurrentUser({
       email: normalized.email,
@@ -410,7 +421,7 @@ export class UserComponent implements OnInit {
     this.ensureCurrentProfile();
   }
 
-  saveUserCrud(): void {
+  async saveUserCrud(): Promise<void> {
     this.notification = null;
 
     if (!this.canManageUsers) {
@@ -423,7 +434,29 @@ export class UserComponent implements OnInit {
       return;
     }
 
-    const normalized: UserRecord = {
+    const normalized = this.buildNormalizedCrudUser();
+    if (this.hasDuplicateUserEmail(normalized)) {
+      this.pushNotification('error', 'Validacion', 'Ya existe un usuario registrado con ese correo electronico.');
+      return;
+    }
+
+    if (this.editingUserId === null) {
+      const created = await this.createCrudUser(normalized);
+      if (!created) {
+        return;
+      }
+    } else {
+      const updated = await this.updateCrudUser(normalized);
+      if (!updated) {
+        return;
+      }
+    }
+
+    this.resetUserCrudForm();
+  }
+
+  private buildNormalizedCrudUser(): UserRecord {
+    return {
       id: this.userCrudForm.id,
       username: this.userCrudForm.username.trim(),
       fullName: this.userCrudForm.fullName.trim(),
@@ -435,52 +468,61 @@ export class UserComponent implements OnInit {
       team: this.userCrudForm.team.trim(),
       isActive: true
     };
+  }
 
-    const duplicateEmail = this.users.some(
-      (user) => user.id !== normalized.id && user.email.toLowerCase() === normalized.email
-    );
+  private hasDuplicateUserEmail(user: UserRecord): boolean {
+    return this.users.some((item) => item.id !== user.id && item.email.toLowerCase() === user.email);
+  }
 
-    if (duplicateEmail) {
-      this.pushNotification('error', 'Validacion', 'Ya existe un usuario registrado con ese correo electronico.');
-      return;
+  private async createCrudUser(normalized: UserRecord): Promise<boolean> {
+    if (!this.canCreateUsers) {
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para crear usuarios.');
+      return false;
     }
 
-    if (this.editingUserId === null) {
-      if (!this.canCreateUsers) {
-      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para crear usuarios.');
-        return;
-      }
-
-      const nextId = this.users.length ? Math.max(...this.users.map((user) => user.id)) + 1 : 1;
-      const newUser: UserRecord = { ...normalized, id: nextId, isActive: true };
+    try {
+      const created = await this.workboardApi.createUser({
+        ...this.toApiUserPayload(normalized),
+        is_active: true
+      });
+      const newUser = this.mapApiUserToView(created);
       this.users = [...this.users, newUser];
       this.permissionsByUser[newUser.email.toLowerCase()] = [];
       this.pushNotification('success', 'Operación completada', 'El usuario se creó correctamente.');
-    } else {
-      if (!this.canEditUsers) {
+      return true;
+    } catch (error) {
+      this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible crear el usuario.');
+      return false;
+    }
+  }
+
+  private async updateCrudUser(normalized: UserRecord): Promise<boolean> {
+    if (!this.canEditUsers) {
       this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para editar usuarios.');
-        return;
-      }
+      return false;
+    }
 
+    try {
+      const updated = await this.workboardApi.updateUser(this.editingUserId as number, this.toApiUserPayload(normalized));
+      const updatedUser = this.mapApiUserToView(updated);
       const previous = this.users.find((user) => user.id === this.editingUserId);
-      this.users = this.users.map((user) => (user.id === this.editingUserId
-        ? { ...normalized, id: user.id, isActive: user.isActive }
-        : user));
 
-      if (previous && previous.email !== normalized.email) {
+      this.users = this.users.map((user) => (user.id === this.editingUserId ? updatedUser : user));
+
+      if (previous && previous.email !== updatedUser.email) {
         const oldKey = previous.email.toLowerCase();
-        const newKey = normalized.email.toLowerCase();
+        const newKey = updatedUser.email.toLowerCase();
         const existingPerms = this.permissionsByUser[oldKey] ?? [];
         delete this.permissionsByUser[oldKey];
         this.permissionsByUser[newKey] = [...new Set(existingPerms)];
       }
 
       this.pushNotification('success', 'Operación completada', 'La información del usuario se actualizó correctamente.');
+      return true;
+    } catch (error) {
+      this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible actualizar el usuario.');
+      return false;
     }
-
-    this.persistUsers();
-    this.persistPermissions();
-    this.resetUserCrudForm();
   }
 
   editUserRecord(user: UserRecord): void {
@@ -495,7 +537,7 @@ export class UserComponent implements OnInit {
     };
   }
 
-  deleteUserRecord(user: UserRecord): void {
+  async deleteUserRecord(user: UserRecord): Promise<void> {
     this.notification = null;
 
     if (!this.canDeleteUsers) {
@@ -513,6 +555,13 @@ export class UserComponent implements OnInit {
       return;
     }
 
+    try {
+      await this.workboardApi.deleteUser(user.id);
+    } catch (error) {
+      this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible eliminar el usuario.');
+      return;
+    }
+
     this.users = this.users.filter((item) => item.id !== user.id);
     delete this.permissionsByUser[user.email.toLowerCase()];
 
@@ -520,13 +569,11 @@ export class UserComponent implements OnInit {
       this.selectedPermissionUserId = this.users[0]?.id ?? null;
     }
 
-    this.persistUsers();
-    this.persistPermissions();
     this.resetUserCrudForm();
     this.pushNotification('success', 'Operación completada', 'El usuario se eliminó correctamente.');
   }
 
-  toggleUserActive(user: UserRecord): void {
+  async toggleUserActive(user: UserRecord): Promise<void> {
     this.notification = null;
 
     const isTargetSuperAdmin = user.username === 'superAdmin' || user.email.toLowerCase() === this.superAdminEmail;
@@ -549,12 +596,17 @@ export class UserComponent implements OnInit {
     if (!user.isActive && !this.canActivateUsers) {
       this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para activar usuarios.');
       return;
-    }
+  }
 
     const nextState = !user.isActive;
-    this.users = this.users.map((item) => (item.id === user.id ? { ...item, isActive: nextState } : item));
-    this.persistUsers();
+    try {
+      await this.workboardApi.setUserActive(user.id, nextState);
+    } catch (error) {
+      this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible actualizar el estado del usuario.');
+      return;
+    }
 
+    this.users = this.users.map((item) => (item.id === user.id ? { ...item, isActive: nextState } : item));
     this.pushNotification(
       'success',
       'Operación completada',
@@ -567,7 +619,7 @@ export class UserComponent implements OnInit {
     this.userCrudForm = this.createEmptyForm();
   }
 
-  togglePermission(permission: UserPermission): void {
+  async togglePermission(permission: UserPermission): Promise<void> {
     this.notification = null;
 
     if (!this.canManagePermissions) {
@@ -593,20 +645,32 @@ export class UserComponent implements OnInit {
       ? current.filter((item) => item !== permission)
       : [...current, permission];
 
-    this.persistPermissions();
+    try {
+      const saved = await this.workboardApi.setUserPermissions(user.id, this.permissionsByUser[email]);
+      this.permissionsByUser[email] = saved.filter((item): item is UserPermission => this.allPermissions.includes(item as UserPermission));
+    } catch (error) {
+      this.permissionsByUser[email] = current;
+      this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible actualizar permisos.');
+      return;
+    }
   }
 
-  addAllPermissionsToSelected(): void {
+  async addAllPermissionsToSelected(): Promise<void> {
     if (!this.canManagePermissions || !this.selectedPermissionUser) {
       return;
     }
 
     const email = this.selectedPermissionUser.email.toLowerCase();
-    this.permissionsByUser[email] = [...this.allPermissions];
-    this.persistPermissions();
+    try {
+      const saved = await this.workboardApi.setUserPermissions(this.selectedPermissionUser.id, [...this.allPermissions]);
+      this.permissionsByUser[email] = saved.filter((item): item is UserPermission => this.allPermissions.includes(item as UserPermission));
+    } catch (error) {
+      this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible asignar permisos.');
+      return;
+    }
   }
 
-  removeAllPermissionsFromSelected(): void {
+  async removeAllPermissionsFromSelected(): Promise<void> {
     if (!this.canManagePermissions || !this.selectedPermissionUser) {
       return;
     }
@@ -617,8 +681,13 @@ export class UserComponent implements OnInit {
     }
 
     const email = user.email.toLowerCase();
-    this.permissionsByUser[email] = [];
-    this.persistPermissions();
+    try {
+      await this.workboardApi.setUserPermissions(user.id, []);
+      this.permissionsByUser[email] = [];
+    } catch (error) {
+      this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible remover permisos.');
+      return;
+    }
   }
 
   hasPermission(permission: UserPermission): boolean {
@@ -663,9 +732,6 @@ export class UserComponent implements OnInit {
     return this.currentUserPermissions.includes(permission);
   }
 
-  private persist(key: string, value: unknown): void {
-    this.storage.setJson(key, value);
-  }
 
   private pushNotification(severity: 'success' | 'error', summary: string, detail: string): void {
     this.notification = { severity, text: `${summary}: ${detail}` };
@@ -694,22 +760,13 @@ export class UserComponent implements OnInit {
     });
   }
 
-  private loadUsers(): void {
+  private async loadUsers(): Promise<void> {
     try {
-      const parsed = this.storage.getJson<unknown[]>(this.storageKey);
-      if (!parsed) {
-        return;
-      }
-
-      if (!Array.isArray(parsed)) {
-        throw new TypeError('Formato inválido');
-      }
-
-      this.users = parsed.map((user, index) => this.normalizeUser(user, index));
-    } catch {
-      this.users = [...this.defaultUsers];
-      this.persistUsers();
-      this.pushNotification('error', 'Integridad de datos', 'Se restauró el catálogo de usuarios debido a datos inválidos en el almacenamiento local.');
+      const apiUsers = await this.workboardApi.listUsers();
+      this.users = apiUsers.map((user) => this.mapApiUserToView(user));
+    } catch (error) {
+      this.users = [];
+      this.pushNotification('error', 'Carga fallida', error instanceof Error ? error.message : 'No fue posible cargar usuarios desde el backend.');
     }
   }
 
@@ -735,26 +792,20 @@ export class UserComponent implements OnInit {
       },
       ...this.users
     ];
-    this.persistUsers();
   }
 
-  private loadPermissions(): void {
+  private async loadPermissions(): Promise<void> {
+    this.permissionsByUser = {};
+
     try {
-      const parsed = this.storage.getJson<Record<string, unknown>>(this.permissionsStorageKey);
-      if (!parsed) {
-        this.permissionsByUser = { ...this.defaultPermissionsByUser };
-        this.persistPermissions();
-        return;
-      }
-
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        throw new TypeError('Formato inválido');
-      }
-
-      this.permissionsByUser = this.normalizePermissionsMap(parsed);
-    } catch {
-      this.permissionsByUser = { ...this.defaultPermissionsByUser };
-      this.persistPermissions();
+      await Promise.all(this.users.map(async (user) => {
+        const permissions = await this.workboardApi.getUserPermissions(user.id);
+        this.permissionsByUser[user.email.toLowerCase()] = permissions
+          .filter((item): item is UserPermission => this.allPermissions.includes(item as UserPermission));
+      }));
+    } catch (error) {
+      this.permissionsByUser = {};
+      this.pushNotification('error', 'Carga fallida', error instanceof Error ? error.message : 'No fue posible cargar permisos desde el backend.');
     }
   }
 
@@ -767,24 +818,90 @@ export class UserComponent implements OnInit {
     }
 
     this.permissionsByUser[this.superAdminEmail] = [...this.allPermissions];
-    this.persistPermissions();
   }
 
-  private loadTickets(): void {
+  private async loadTickets(): Promise<void> {
     try {
-      const parsed = this.storage.getJson<TicketRecord[]>(this.ticketsStorageKey);
-      if (!parsed) {
-        this.tickets = [];
-        return;
-      }
-
-      if (!Array.isArray(parsed)) {
-        throw new TypeError('Formato inválido');
-      }
-
-      this.tickets = parsed;
+      const apiTickets = await this.workboardApi.listTickets();
+      this.tickets = apiTickets.map((ticket) => ({
+        id: ticket.id,
+        groupId: ticket.group_id,
+        title: ticket.title,
+        description: ticket.description ?? '',
+        createdBy: ticket.created_by ? `Usuario #${ticket.created_by}` : this.currentUser.email,
+        status: this.normalizeTicketStatus(ticket.status),
+        assignedTo: ticket.assigned_to ? `Usuario #${ticket.assigned_to}` : '',
+        priority: 'Media',
+        createdAt: ticket.created_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+        dueDate: ticket.updated_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+        comments: [],
+        history: []
+      }));
     } catch {
       this.tickets = [];
+    }
+  }
+
+  private mapApiUserToView(user: {
+    id: number;
+    username: string;
+    email: string;
+    is_active: boolean;
+    full_name?: string | null;
+    address?: string | null;
+    phone?: string | null;
+    birth_date?: string | null;
+    role?: string | null;
+    team?: string | null;
+  }): UserRecord {
+    return {
+      id: Number(user.id),
+      username: user.username,
+      fullName: user.full_name ?? user.username,
+      address: user.address ?? '',
+      phone: user.phone ?? '',
+      birthDate: user.birth_date ?? '2000-01-01',
+      email: user.email,
+      role: user.role ?? 'Miembro',
+      team: user.team ?? 'Seguridad web',
+      isActive: Boolean(user.is_active)
+    };
+  }
+
+  private toApiUserPayload(user: UserRecord): {
+    username: string;
+    email: string;
+    full_name: string;
+    address: string;
+    phone: string;
+    birth_date: string;
+    role: string;
+    team: string;
+  } {
+    return {
+      username: user.username,
+      email: user.email,
+      full_name: user.fullName,
+      address: user.address,
+      phone: user.phone,
+      birth_date: user.birthDate,
+      role: user.role,
+      team: user.team
+    };
+  }
+
+  private normalizeTicketStatus(status: string): TicketStatus {
+    switch (status) {
+      case 'in-progress':
+        return 'En progreso';
+      case 'review':
+        return 'Revisión';
+      case 'blocked':
+        return 'Bloqueado';
+      case 'done':
+        return 'Hecho';
+      default:
+        return 'Pendiente';
     }
   }
 
@@ -811,8 +928,6 @@ export class UserComponent implements OnInit {
     };
   }
 
-  private persistUsers(): void { this.persist(this.storageKey, this.users); }
-  private persistPermissions(): void { this.persist(this.permissionsStorageKey, this.permissionsByUser); }
 
   private normalizePermissionsMap(source: Record<string, unknown>): Record<string, UserPermission[]> {
     const result: Record<string, UserPermission[]> = {};
