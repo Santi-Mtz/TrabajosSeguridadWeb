@@ -8,6 +8,7 @@ async function authRoutes(fastify) {
         200: gatewayAuthResponseSchema,
         400: gatewayAuthResponseSchema,
         401: gatewayAuthResponseSchema,
+        403: gatewayAuthResponseSchema,
         500: gatewayAuthResponseSchema,
         502: gatewayAuthResponseSchema
       }

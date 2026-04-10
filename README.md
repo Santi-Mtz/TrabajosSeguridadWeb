@@ -267,6 +267,35 @@ Content-Type: application/json
 }
 ```
 
+### Codigos de operacion (intOpCode)
+
+- `USR_LOGIN_OK`: login exitoso.
+- `USR_LOGIN_INVALID`: credenciales invalidas.
+- `USR_LOGIN_INACTIVE`: cuenta inactiva.
+- `USR_LOGIN_ERROR`: error interno en user-service.
+- `GW_UPSTREAM_ERROR`: gateway no pudo contactar user-service.
+
+### Pruebas de aceptacion Fastify
+
+1. Login valido (`200`):
+	- `email`: `admin_actualizado@correo.com`
+	- `password`: `NuevaPass123*`
+	- esperado: `USR_LOGIN_OK` y `data` con `id`, `username`, `email`, `login_date`, `permissions`.
+2. Password invalida (`401`):
+	- `email`: `admin_actualizado@correo.com`
+	- `password`: incorrecta
+	- esperado: `USR_LOGIN_INVALID`.
+3. Usuario inactivo (`403`):
+	- desactivar temporalmente el usuario en DB (`is_active = false`).
+	- esperado: `USR_LOGIN_INACTIVE`.
+
+Consulta para desactivar/reactivar usuario de prueba:
+
+```sql
+UPDATE public.users SET is_active = false WHERE email = 'nuevo@correo.com';
+UPDATE public.users SET is_active = true WHERE email = 'nuevo@correo.com';
+```
+
 ## Dependencias notables
 
 | Paquete | Versión | Nota |
