@@ -1,17 +1,10 @@
 import { Injectable } from '@angular/core';
-import { StorageService } from '../../services/storage.service';
 import { GroupPermissionsMap, GroupRecord, TicketRecord } from './group.models';
-import { normalizeTicket } from './group-ticket.utils';
 
 @Injectable({
   providedIn: 'root'
 })
 export class GroupBoardDataService {
-  private readonly groupsStorageKey = 'crud.groups';
-  private readonly ticketsStorageKey = 'board.tickets';
-  private readonly membersStorageKey = 'board.group.members';
-  private readonly permissionsStorageKey = 'board.group.permissions';
-
   private readonly defaultGroups: GroupRecord[] = [
     {
       id: 1,
@@ -116,8 +109,6 @@ export class GroupBoardDataService {
     }
   };
 
-  constructor(private readonly storage: StorageService) {}
-
   createInitialState(): {
     groups: GroupRecord[];
     tickets: TicketRecord[];
@@ -130,113 +121,6 @@ export class GroupBoardDataService {
       membersByGroup: this.cloneMembers(this.defaultMembersByGroup),
       permissionsByGroup: this.clonePermissions(this.defaultPermissionsByGroup)
     };
-  }
-
-  loadGroups(selectedGroupId: number): { groups: GroupRecord[]; selectedGroupId: number; restoredInvalid: boolean } {
-    try {
-      const parsed = this.storage.getJson<GroupRecord[]>(this.groupsStorageKey);
-      let groups = parsed;
-
-      if (!groups || !Array.isArray(groups) || groups.length === 0) {
-        groups = this.cloneGroups(this.defaultGroups);
-      }
-
-      const nextSelectedGroupId = groups.some((group) => group.id === selectedGroupId)
-        ? selectedGroupId
-        : (groups[0]?.id ?? selectedGroupId);
-
-      return { groups, selectedGroupId: nextSelectedGroupId, restoredInvalid: false };
-    } catch {
-      const groups = this.cloneGroups(this.defaultGroups);
-      this.persistGroups(groups);
-      return {
-        groups,
-        selectedGroupId: groups[0]?.id ?? selectedGroupId,
-        restoredInvalid: true
-      };
-    }
-  }
-
-  loadTickets(selectedGroupId: number, currentUserEmail: string): { tickets: TicketRecord[]; restoredInvalid: boolean } {
-    try {
-      const parsed = this.storage.getJson<unknown[]>(this.ticketsStorageKey);
-      if (!parsed) {
-        const tickets = this.cloneTickets(this.defaultTickets);
-        this.persistTickets(tickets);
-        return { tickets, restoredInvalid: false };
-      }
-
-      if (!Array.isArray(parsed)) {
-        throw new TypeError('Formato inválido');
-      }
-
-      return {
-        tickets: parsed.map((item, index) => normalizeTicket(item, index, selectedGroupId, currentUserEmail)),
-        restoredInvalid: false
-      };
-    } catch {
-      const tickets = this.cloneTickets(this.defaultTickets);
-      this.persistTickets(tickets);
-      return { tickets, restoredInvalid: true };
-    }
-  }
-
-  loadMembers(): { membersByGroup: Record<number, string[]>; restoredInvalid: boolean } {
-    try {
-      const parsed = this.storage.getJson<Record<number, string[]>>(this.membersStorageKey);
-      if (!parsed) {
-        const membersByGroup = this.cloneMembers(this.defaultMembersByGroup);
-        this.persistMembers(membersByGroup);
-        return { membersByGroup, restoredInvalid: false };
-      }
-
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        throw new TypeError('Formato inválido');
-      }
-
-      return { membersByGroup: parsed, restoredInvalid: false };
-    } catch {
-      const membersByGroup = this.cloneMembers(this.defaultMembersByGroup);
-      this.persistMembers(membersByGroup);
-      return { membersByGroup, restoredInvalid: true };
-    }
-  }
-
-  loadPermissions(): { permissionsByGroup: GroupPermissionsMap; restoredInvalid: boolean } {
-    try {
-      const parsed = this.storage.getJson<GroupPermissionsMap>(this.permissionsStorageKey);
-      if (!parsed) {
-        const permissionsByGroup = this.clonePermissions(this.defaultPermissionsByGroup);
-        this.persistPermissions(permissionsByGroup);
-        return { permissionsByGroup, restoredInvalid: false };
-      }
-
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        throw new TypeError('Formato inválido');
-      }
-
-      return { permissionsByGroup: parsed, restoredInvalid: false };
-    } catch {
-      const permissionsByGroup = this.clonePermissions(this.defaultPermissionsByGroup);
-      this.persistPermissions(permissionsByGroup);
-      return { permissionsByGroup, restoredInvalid: true };
-    }
-  }
-
-  persistGroups(groups: GroupRecord[]): void {
-    this.storage.setJson(this.groupsStorageKey, groups);
-  }
-
-  persistTickets(tickets: TicketRecord[]): void {
-    this.storage.setJson(this.ticketsStorageKey, tickets);
-  }
-
-  persistMembers(membersByGroup: Record<number, string[]>): void {
-    this.storage.setJson(this.membersStorageKey, membersByGroup);
-  }
-
-  persistPermissions(permissionsByGroup: GroupPermissionsMap): void {
-    this.storage.setJson(this.permissionsStorageKey, permissionsByGroup);
   }
 
   syncGroupMetrics(groups: GroupRecord[], tickets: TicketRecord[], membersByGroup: Record<number, string[]>): GroupRecord[] {

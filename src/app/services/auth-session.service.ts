@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { StorageService } from './storage.service';
 
 export type AuthSessionUser = {
+  id?: number;
   email: string;
   displayName: string;
 };
@@ -25,6 +26,10 @@ export class AuthSessionService {
         throw new TypeError('Formato invalido');
       }
 
+      if (parsed.id !== undefined && typeof parsed.id !== 'number') {
+        throw new TypeError('Formato invalido');
+      }
+
       const email = parsed.email.trim().toLowerCase();
       const displayName = parsed.displayName.trim();
 
@@ -32,7 +37,7 @@ export class AuthSessionService {
         return null;
       }
 
-      return { email, displayName };
+      return { id: parsed.id, email, displayName };
     } catch {
       return null;
     }
@@ -48,6 +53,7 @@ export class AuthSessionService {
 
   setCurrentUser(user: AuthSessionUser): void {
     this.storage.setJson(this.authStorageKey, {
+      id: typeof user.id === 'number' ? user.id : undefined,
       email: user.email.trim().toLowerCase(),
       displayName: user.displayName.trim()
     });

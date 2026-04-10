@@ -108,6 +108,7 @@ export class LoginComponent {
       this.storage.setJson(this.permissionsStorageKey, existingMap);
 
       this.authSession.setCurrentUser({
+        id: payload.data.id,
         email: payload.data.email,
         displayName: payload.data.username
       });

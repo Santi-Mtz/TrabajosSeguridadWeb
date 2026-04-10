@@ -223,4 +223,151 @@ export class GroupService {
       };
     }
   }
+
+  async addGroupMember(groupId: number, email: string) {
+    try {
+      const normalizedEmail = String(email || '').trim().toLowerCase();
+      if (!normalizedEmail) {
+        return {
+          statusCode: 400,
+          intOpCode: 'GRP_INVALID_INPUT',
+          message: 'Member email is required',
+          data: null,
+        };
+      }
+
+      const groupResult = await this.databaseService.query('SELECT id FROM groups WHERE id = $1', [groupId]);
+      if (groupResult.rows.length === 0) {
+        return {
+          statusCode: 404,
+          intOpCode: 'GRP_NOT_FOUND',
+          message: 'Group not found',
+          data: null,
+        };
+      }
+
+      const userResult = await this.databaseService.query(
+        'SELECT id, username, email, is_active FROM users WHERE LOWER(email) = LOWER($1)',
+        [normalizedEmail]
+      );
+
+      if (userResult.rows.length === 0) {
+        return {
+          statusCode: 404,
+          intOpCode: 'GRP_MEMBER_NOT_FOUND',
+          message: 'User not found',
+          data: null,
+        };
+      }
+
+      const user = userResult.rows[0];
+      const existingMember = await this.databaseService.query(
+        'SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2',
+        [groupId, user.id]
+      );
+
+      if (existingMember.rows.length > 0) {
+        return {
+          statusCode: 409,
+          intOpCode: 'GRP_MEMBER_ALREADY_EXISTS',
+          message: 'User is already a member of this group',
+          data: null,
+        };
+      }
+
+      const insertResult = await this.databaseService.query(
+        `INSERT INTO group_members (group_id, user_id)
+         VALUES ($1, $2)
+         RETURNING id`,
+        [groupId, user.id]
+      );
+
+      const result = await this.databaseService.query(
+        `SELECT u.id, u.username, u.email, u.is_active, gm.joined_at
+         FROM group_members gm
+         JOIN users u ON gm.user_id = u.id
+         WHERE gm.id = $1`,
+        [insertResult.rows[0].id]
+      );
+
+      return {
+        statusCode: 201,
+        intOpCode: 'GRP_ADD_MEMBER_SUCCESS',
+        message: 'Group member added successfully',
+        data: result.rows[0],
+      };
+    } catch (error) {
+      console.error('Error adding group member:', error);
+      return {
+        statusCode: 500,
+        intOpCode: 'GRP_ERROR_ADD_MEMBER',
+        message: 'Error adding group member',
+        data: null,
+      };
+    }
+  }
+
+  async removeGroupMember(groupId: number, email: string) {
+    try {
+      const normalizedEmail = String(email || '').trim().toLowerCase();
+      if (!normalizedEmail) {
+        return {
+          statusCode: 400,
+          intOpCode: 'GRP_INVALID_INPUT',
+          message: 'Member email is required',
+          data: null,
+        };
+      }
+
+      const userResult = await this.databaseService.query(
+        'SELECT id, username, email, is_active FROM users WHERE LOWER(email) = LOWER($1)',
+        [normalizedEmail]
+      );
+
+      if (userResult.rows.length === 0) {
+        return {
+          statusCode: 404,
+          intOpCode: 'GRP_MEMBER_NOT_FOUND',
+          message: 'User not found',
+          data: null,
+        };
+      }
+
+      const user = userResult.rows[0];
+      const result = await this.databaseService.query(
+        `DELETE FROM group_members
+         WHERE group_id = $1 AND user_id = $2
+         RETURNING id, group_id, user_id, joined_at`,
+        [groupId, user.id]
+      );
+
+      if (result.rows.length === 0) {
+        return {
+          statusCode: 404,
+          intOpCode: 'GRP_MEMBER_NOT_FOUND',
+          message: 'Group member not found',
+          data: null,
+        };
+      }
+
+      return {
+        statusCode: 200,
+        intOpCode: 'GRP_REMOVE_MEMBER_SUCCESS',
+        message: 'Group member removed successfully',
+        data: {
+          id: result.rows[0].id,
+          group_id: result.rows[0].group_id,
+          user_id: result.rows[0].user_id,
+        },
+      };
+    } catch (error) {
+      console.error('Error removing group member:', error);
+      return {
+        statusCode: 500,
+        intOpCode: 'GRP_ERROR_REMOVE_MEMBER',
+        message: 'Error removing group member',
+        data: null,
+      };
+    }
+  }
 }

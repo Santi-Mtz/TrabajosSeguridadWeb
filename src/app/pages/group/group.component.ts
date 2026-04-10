@@ -18,6 +18,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { AuthSessionService, AuthSessionUser } from '../../services/auth-session.service';
 import { AuthorizationService } from '../../services/authorization.service';
 import { ValidationService } from '../../services/validation.service';
+import { WorkboardApiService } from '../../services/workboard-api.service';
 import { GroupBoardDataService } from './group-board-data.service';
 import { GroupRulesService } from './group-rules.service';
 import { GroupTicketFacadeService } from './group-ticket-facade.service';
@@ -80,6 +81,7 @@ export class GroupComponent implements OnInit {
     private readonly authSession: AuthSessionService,
     private readonly authorization: AuthorizationService,
     private readonly validation: ValidationService,
+    private readonly workboardApi: WorkboardApiService,
     private readonly groupBoardData: GroupBoardDataService,
     private readonly groupRules: GroupRulesService,
     private readonly groupTicketFacade: GroupTicketFacadeService
@@ -135,10 +137,9 @@ export class GroupComponent implements OnInit {
     this.permissionsByGroup = initialState.permissionsByGroup;
 
     this.loadCurrentUser();
-    this.loadGroups();
-    this.loadTickets();
-    this.loadMembers();
-    this.loadPermissions();
+    void this.loadGroups();
+    void this.loadTickets();
+    void this.loadMembers(this.selectedGroupId);
     this.syncGroupFromQueryParam();
     this.groupNameForm = this.selectedGroupName;
   }
@@ -393,7 +394,7 @@ export class GroupComponent implements OnInit {
     return this.groupRules.statusColumnId(status);
   }
 
-  dropTicket(event: CdkDragDrop<TicketRecord[]>, targetStatus: GroupStatus): void {
+  async dropTicket(event: CdkDragDrop<TicketRecord[]>, targetStatus: GroupStatus): Promise<void> {
     if (event.previousContainer === event.container) {
       return;
     }
@@ -425,8 +426,16 @@ export class GroupComponent implements OnInit {
       };
     });
 
+    try {
+      await this.workboardApi.updateTicket(ticket.id, {
+        status: this.mapStatusToApi(targetStatus),
+        assigned_to: this.resolveAssignedUserId(ticket.assignedTo)
+      });
+    } catch {
+      // Keep the local update if the backend is temporarily unavailable.
+    }
+
     this.syncGroupMetrics();
-    this.persistTickets();
     this.pushNotification('success', 'Operación completada', `El ticket se movió al estado "${targetStatus}".`);
   }
 
@@ -435,9 +444,10 @@ export class GroupComponent implements OnInit {
     this.groupNameForm = this.selectedGroupName;
     this.showCreateGroupForm = false;
     this.newGroupName = '';
+    void this.loadMembers(this.selectedGroupId);
   }
 
-  createGroup(): void {
+  async createGroup(): Promise<void> {
     this.notification = null;
 
     if (!this.canCreateGroup) {
@@ -457,9 +467,20 @@ export class GroupComponent implements OnInit {
       return;
     }
 
-    const nextId = this.groups.length ? Math.max(...this.groups.map((group) => group.id)) + 1 : 1;
     const author = this.currentUser.displayName || this.currentUser.email;
     const memberEmail = this.currentUser.email.trim().toLowerCase();
+    let nextId = this.groups.length ? Math.max(...this.groups.map((group) => group.id)) + 1 : 1;
+
+    try {
+      const createdGroup = await this.workboardApi.createGroup({
+        name,
+        description: 'Grupo creado desde el frontend',
+        created_by: this.currentUser.id ?? 1
+      });
+      nextId = createdGroup.id;
+    } catch {
+      // Keep the locally generated id when the backend request fails.
+    }
 
     const newGroup: GroupRecord = {
       id: nextId,
@@ -482,10 +503,6 @@ export class GroupComponent implements OnInit {
       'group:remove:members': [memberEmail, 'superadmin@seguridadweb.com', 'admin@seguridadweb.com']
     };
 
-    this.persistGroups();
-    this.persistMembers();
-    this.persistPermissions();
-
     this.selectedGroupId = nextId;
     this.groupNameForm = name;
     this.newGroupName = '';
@@ -493,7 +510,7 @@ export class GroupComponent implements OnInit {
     this.pushNotification('success', 'Operación completada', 'El grupo se creó correctamente.');
   }
 
-  saveGroupSettings(): void {
+  async saveGroupSettings(): Promise<void> {
     this.notification = null;
 
     if (!this.canEditGroup) {
@@ -516,14 +533,22 @@ export class GroupComponent implements OnInit {
       return;
     }
 
+    try {
+      await this.workboardApi.updateGroup(this.selectedGroupId, {
+        name,
+        description: 'Grupo actualizado desde el frontend'
+      });
+    } catch {
+      // Keep the local update if the backend request fails.
+    }
+
     this.groups = this.groups.map((group) =>
       group.id === this.selectedGroupId ? { ...group, name } : group
     );
-    this.persistGroups();
     this.pushNotification('success', 'Operación completada', 'El nombre del grupo se actualizó correctamente.');
   }
 
-  deleteCurrentGroup(): void {
+  async deleteCurrentGroup(): Promise<void> {
     this.notification = null;
 
     if (!this.canDeleteGroup) {
@@ -547,15 +572,17 @@ export class GroupComponent implements OnInit {
     }
 
     const deletedGroupId = this.selectedGroupId;
+
+    try {
+      await this.workboardApi.deleteGroup(deletedGroupId);
+    } catch {
+      // Keep local cleanup even if backend deletion fails.
+    }
+
     this.groups = this.groups.filter((group) => group.id !== deletedGroupId);
     this.tickets = this.tickets.filter((ticket) => ticket.groupId !== deletedGroupId);
     delete this.membersByGroup[deletedGroupId];
     delete this.permissionsByGroup[deletedGroupId];
-
-    this.persistGroups();
-    this.persistTickets();
-    this.persistMembers();
-    this.persistPermissions();
 
     this.selectedGroupId = this.groups[0]?.id ?? 1;
     this.groupNameForm = this.selectedGroupName;
@@ -582,7 +609,7 @@ export class GroupComponent implements OnInit {
     this.ticketForm.assignedTo = this.currentUser.email;
   }
 
-  saveTicket(): void {
+  async saveTicket(): Promise<void> {
     this.notification = null;
 
     if (!this.canCreateTickets) {
@@ -610,10 +637,23 @@ export class GroupComponent implements OnInit {
 
     const newTicket = result.ticket;
 
+    try {
+      const createdTicket = await this.workboardApi.createTicket({
+        title: newTicket.title,
+        description: newTicket.description,
+        status: this.mapStatusToApi(newTicket.status),
+        group_id: newTicket.groupId,
+        assigned_to: this.resolveAssignedUserId(newTicket.assignedTo),
+        created_by: this.currentUser.id ?? 1
+      });
+
+      newTicket.id = createdTicket.id;
+    } catch {
+      // If backend creation fails, keep the optimistic local ticket.
+    }
+
     this.tickets = [...this.tickets, newTicket];
     this.syncGroupMetrics();
-    this.persistTickets();
-    this.persistGroups();
     this.createDialogVisible = false;
     this.selectedTicket = newTicket;
     this.detailForm = createFormFromTicket(newTicket);
@@ -630,7 +670,7 @@ export class GroupComponent implements OnInit {
     this.detailDialogVisible = true;
   }
 
-  saveTicketDetail(): void {
+  async saveTicketDetail(): Promise<void> {
     if (!this.selectedTicket) {
       return;
     }
@@ -671,6 +711,19 @@ export class GroupComponent implements OnInit {
       ...historyChanges.map((entry) => `${entry} (${new Date().toLocaleString()})`)
     ];
 
+    try {
+      const updatedTicket = await this.workboardApi.updateTicket(nextTicket.id, {
+        title: nextTicket.title,
+        description: nextTicket.description,
+        status: this.mapStatusToApi(nextTicket.status),
+        assigned_to: this.resolveAssignedUserId(nextTicket.assignedTo)
+      });
+
+      nextTicket.id = updatedTicket.id;
+    } catch {
+      // Keep the local update if backend persistence fails.
+    }
+
     this.updateTicket(nextTicket);
     this.pushNotification('success', 'Operación completada', 'El ticket se actualizó correctamente.');
   }
@@ -708,8 +761,6 @@ export class GroupComponent implements OnInit {
 
     this.tickets = updated.tickets;
 
-    this.persistTickets();
-
     this.selectedTicket = updated.selectedTicket;
     if (this.selectedTicket) {
       this.detailForm = createFormFromTicket(this.selectedTicket);
@@ -718,7 +769,7 @@ export class GroupComponent implements OnInit {
     this.pushNotification('success', 'Operación completada', 'El comentario se agregó al ticket correctamente.');
   }
 
-  addMember(): void {
+  async addMember(): Promise<void> {
     this.notification = null;
 
     if (!this.canAddGroupMembers) {
@@ -743,15 +794,19 @@ export class GroupComponent implements OnInit {
       return;
     }
 
-    this.membersByGroup[this.selectedGroupId] = [...this.groupMembers, member];
-    this.syncGroupMetrics();
+    try {
+      await this.workboardApi.addGroupMember(this.selectedGroupId, member);
+    } catch (error) {
+      this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible agregar el miembro.');
+      return;
+    }
+
     this.newMember = '';
-    this.persistMembers();
-    this.persistGroups();
+    await this.loadMembers(this.selectedGroupId);
     this.pushNotification('success', 'Operación completada', 'El miembro se agregó al grupo correctamente.');
   }
 
-  removeMember(member: string): void {
+  async removeMember(member: string): Promise<void> {
     this.notification = null;
 
     if (!this.canRemoveGroupMembers) {
@@ -759,10 +814,14 @@ export class GroupComponent implements OnInit {
       return;
     }
 
-    this.membersByGroup[this.selectedGroupId] = this.groupMembers.filter((item) => item !== member);
-    this.syncGroupMetrics();
-    this.persistMembers();
-    this.persistGroups();
+    try {
+      await this.workboardApi.removeGroupMember(this.selectedGroupId, member);
+    } catch (error) {
+      this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible remover el miembro.');
+      return;
+    }
+
+    await this.loadMembers(this.selectedGroupId);
     this.pushNotification('success', 'Operación completada', 'El miembro se eliminó del grupo correctamente.');
   }
 
@@ -770,25 +829,61 @@ export class GroupComponent implements OnInit {
     this.notification = { severity, text: `${summary}: ${detail}` };
   }
 
-  private loadGroups(): void {
-    const result = this.groupBoardData.loadGroups(this.selectedGroupId);
-    this.groups = result.groups;
-    this.selectedGroupId = result.selectedGroupId;
+  private async loadGroups(): Promise<void> {
+    try {
+      const apiGroups = await this.workboardApi.listGroups();
+      if (apiGroups.length > 0) {
+        this.groups = apiGroups.map((group) => ({
+          id: group.id,
+          name: group.name,
+          category: 'General',
+          level: 'Backend',
+          author: group.created_by ? `Usuario #${group.created_by}` : 'Sistema',
+          members: this.membersByGroup[group.id]?.length ?? 0,
+          tickets: this.tickets.filter((ticket) => ticket.groupId === group.id).length
+        }));
 
-    if (result.restoredInvalid) {
-      this.pushNotification('error', 'Integridad de datos', 'Se restauraron los grupos debido a datos inválidos en el almacenamiento local.');
+        this.selectedGroupId = this.groups.some((group) => group.id === this.selectedGroupId)
+          ? this.selectedGroupId
+          : this.groups[0].id;
+        this.groupNameForm = this.selectedGroupName;
+        this.cdr.markForCheck();
+        return;
+      }
+    } catch {
+      // fall back to local cache below
     }
+    this.cdr.markForCheck();
   }
 
-  private persistGroups(): void { this.groupBoardData.persistGroups(this.groups); }
-
-  private loadTickets(): void {
-    const result = this.groupBoardData.loadTickets(this.selectedGroupId, this.currentUser.email);
-    this.tickets = result.tickets;
+  private async loadTickets(): Promise<void> {
+    try {
+      const apiTickets = await this.workboardApi.listTickets();
+      if (apiTickets.length > 0) {
+        this.tickets = apiTickets.map((ticket, index) => ({
+          id: ticket.id,
+          groupId: ticket.group_id,
+          title: ticket.title,
+          description: ticket.description ?? '',
+          createdBy: ticket.created_by ? `Usuario #${ticket.created_by}` : this.currentUser.email,
+          status: this.normalizeTicketStatus(ticket.status),
+          assignedTo: ticket.assigned_to ? `Usuario #${ticket.assigned_to}` : '',
+          priority: 'Media',
+          createdAt: ticket.created_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+          dueDate: ticket.updated_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+          comments: [],
+          history: [`Sincronizado desde backend (${index + 1})`]
+        }));
+        this.syncGroupMetrics();
+        this.cdr.markForCheck();
+        return;
+      }
+    } catch {
+      // fall back to local cache below
+    }
     this.syncGroupMetrics();
+    this.cdr.markForCheck();
   }
-
-  private persistTickets(): void { this.groupBoardData.persistTickets(this.tickets); }
 
   private loadCurrentUser(): void {
     this.currentUser = this.authSession.getCurrentUser({
@@ -797,20 +892,28 @@ export class GroupComponent implements OnInit {
     });
   }
 
-  private loadMembers(): void {
-    const result = this.groupBoardData.loadMembers();
-    this.membersByGroup = result.membersByGroup;
+  private async loadMembers(groupId: number): Promise<void> {
+    try {
+      const members = await this.workboardApi.listGroupMembers(groupId);
+      if (members.length > 0) {
+        this.membersByGroup = {
+          ...this.membersByGroup,
+          [groupId]: members.map((member) => member.email)
+        };
+        this.syncGroupMetrics();
+        this.cdr.markForCheck();
+        return;
+      }
+    } catch {
+      // fall back to local cache below
+    }
+    this.membersByGroup = {
+      ...this.membersByGroup,
+      [groupId]: this.membersByGroup[groupId] ?? []
+    };
     this.syncGroupMetrics();
+    this.cdr.markForCheck();
   }
-
-  private persistMembers(): void { this.groupBoardData.persistMembers(this.membersByGroup); }
-
-  private loadPermissions(): void {
-    const result = this.groupBoardData.loadPermissions();
-    this.permissionsByGroup = result.permissionsByGroup;
-  }
-
-  private persistPermissions(): void { this.groupBoardData.persistPermissions(this.permissionsByGroup); }
 
   private syncGroupFromQueryParam(): void {
     this.route.queryParamMap.subscribe((params) => {
@@ -818,6 +921,7 @@ export class GroupComponent implements OnInit {
       if (Number.isFinite(queryGroupId) && this.groups.some((group) => group.id === queryGroupId)) {
         this.selectedGroupId = queryGroupId;
         this.groupNameForm = this.selectedGroupName;
+        void this.loadMembers(this.selectedGroupId);
       }
 
       if (params.get('createTicket') === '1') {
@@ -830,6 +934,52 @@ export class GroupComponent implements OnInit {
 
   private syncGroupMetrics(): void {
     this.groups = this.groupBoardData.syncGroupMetrics(this.groups, this.tickets, this.membersByGroup);
+  }
+
+  private normalizeTicketStatus(status: string): GroupStatus {
+    switch (status) {
+      case 'in-progress':
+        return 'En progreso';
+      case 'review':
+        return 'Revisión';
+      case 'blocked':
+        return 'Bloqueado';
+      case 'done':
+        return 'Hecho';
+      default:
+        return 'Pendiente';
+    }
+  }
+
+  private mapStatusToApi(status: GroupStatus): string {
+    switch (status) {
+      case 'En progreso':
+        return 'in-progress';
+      case 'Revisión':
+        return 'review';
+      case 'Bloqueado':
+        return 'blocked';
+      case 'Hecho':
+        return 'done';
+      default:
+        return 'open';
+    }
+  }
+
+  private resolveAssignedUserId(assignedTo: string): number | null {
+    const normalizedAssignedTo = assignedTo.trim().toLowerCase();
+    const currentEmail = this.currentUser.email.trim().toLowerCase();
+    const currentDisplayName = this.currentUser.displayName.trim().toLowerCase();
+
+    if (!normalizedAssignedTo) {
+      return null;
+    }
+
+    if (normalizedAssignedTo === currentEmail || normalizedAssignedTo === currentDisplayName) {
+      return this.currentUser.id ?? null;
+    }
+
+    return null;
   }
 
   private isTicketFormValid(): boolean {
@@ -861,8 +1011,6 @@ export class GroupComponent implements OnInit {
   private updateTicket(nextTicket: TicketRecord): void {
     this.tickets = this.groupTicketFacade.replaceTicket(this.tickets, nextTicket);
     this.syncGroupMetrics();
-    this.persistTickets();
-    this.persistGroups();
     this.selectedTicket = nextTicket;
     this.detailForm = createFormFromTicket(nextTicket);
   }

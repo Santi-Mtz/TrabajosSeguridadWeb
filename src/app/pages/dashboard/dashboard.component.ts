@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CardModule } from 'primeng/card';
@@ -10,6 +10,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { AuthSessionService, AuthSessionUser } from '../../services/auth-session.service';
 import { AuthorizationService } from '../../services/authorization.service';
 import { StorageService } from '../../services/storage.service';
+import { WorkboardApiService } from '../../services/workboard-api.service';
 
 type TicketStatus = 'Pendiente' | 'En progreso' | 'Revisión' | 'Bloqueado' | 'Hecho';
 
@@ -43,9 +44,11 @@ type GroupOption = {
 export class DashboardComponent implements OnInit {
   constructor(
     private readonly router: Router,
+    private readonly cdr: ChangeDetectorRef,
     private readonly storage: StorageService,
     private readonly authSession: AuthSessionService,
-    private readonly authorization: AuthorizationService
+    private readonly authorization: AuthorizationService,
+    private readonly workboardApi: WorkboardApiService
   ) {}
 
   private readonly ticketsStorageKey = 'board.tickets';
@@ -130,9 +133,8 @@ export class DashboardComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadCurrentUser();
-    this.loadGroups();
-    this.loadTickets();
-    this.selectedGroupId = this.groups[0]?.id ?? null;
+    void this.loadGroups();
+    void this.loadTickets();
   }
 
   get totalTickets(): number {
@@ -248,49 +250,96 @@ export class DashboardComponent implements OnInit {
     });
   }
 
-  private loadGroups(): void {
+  private async loadGroups(): Promise<void> {
     try {
-      const parsed = this.storage.getJson<Array<{ id?: number; name?: string }>>(this.groupsStorageKey);
-      if (!parsed) {
-        return;
-      }
-
-      if (!Array.isArray(parsed)) {
-        throw new TypeError('Formato inválido');
-      }
-
-      this.groups = parsed
-        .filter((item) => typeof item.id === 'number' && typeof item.name === 'string')
-        .map((item) => ({ id: item.id as number, name: item.name as string }));
+      const apiGroups = await this.workboardApi.listGroups();
+      this.groups = apiGroups
+        .filter((group) => typeof group.id === 'number' && typeof group.name === 'string')
+        .map((group) => ({ id: group.id, name: group.name }))
+        .sort((left, right) => left.id - right.id);
 
       if (this.groups.length === 0) {
         this.groups = [...this.defaultGroups];
       }
+
+      this.selectedGroupId = this.groups[0]?.id ?? null;
+      this.persistGroups(this.groups);
+      this.cdr.markForCheck();
     } catch {
       this.groups = [...this.defaultGroups];
+      this.selectedGroupId = this.groups[0]?.id ?? null;
+      this.persistGroups(this.groups);
     }
   }
 
-  private loadTickets(): void {
+  private async loadTickets(): Promise<void> {
     try {
-      const parsed = this.storage.getJson<TicketRecord[]>(this.ticketsStorageKey);
-      if (!parsed) {
-        this.persistTickets(this.defaultTickets);
-        return;
+      const currentUser = this.authSession.getCurrentUserOrNull();
+      const apiTickets = await this.workboardApi.listTickets();
+      const createdAt = new Date().toISOString().slice(0, 10);
+
+      this.tickets = apiTickets
+        .filter((ticket) => typeof ticket.id === 'number' && typeof ticket.title === 'string' && typeof ticket.group_id === 'number')
+        .map((ticket, index) => ({
+          id: ticket.id,
+          groupId: ticket.group_id,
+          title: ticket.title,
+          description: ticket.description ?? '',
+          status: this.normalizeStatus(ticket.status),
+          assignedTo: this.normalizeAssignedTo(ticket.assigned_to, currentUser?.id ?? null),
+          priority: 'Media',
+          createdAt: ticket.created_at?.slice(0, 10) ?? createdAt,
+          dueDate: ticket.updated_at?.slice(0, 10) ?? createdAt,
+          comments: [],
+          history: [
+            `Sincronizado desde backend (${index + 1})`
+          ]
+        }));
+
+      if (this.tickets.length === 0) {
+        this.tickets = [...this.defaultTickets];
       }
 
-      if (!Array.isArray(parsed)) {
-        throw new TypeError('Formato inválido');
-      }
-
-      this.tickets = parsed;
+      this.persistTickets(this.tickets);
+      this.cdr.markForCheck();
     } catch {
       this.tickets = [...this.defaultTickets];
       this.persistTickets(this.tickets);
     }
   }
 
+  private normalizeStatus(status: string): TicketStatus {
+    switch (status) {
+      case 'in-progress':
+        return 'En progreso';
+      case 'review':
+        return 'Revisión';
+      case 'blocked':
+        return 'Bloqueado';
+      case 'done':
+        return 'Hecho';
+      default:
+        return 'Pendiente';
+    }
+  }
+
+  private normalizeAssignedTo(assignedTo: number | null | undefined, currentUserId: number | null): string {
+    if (assignedTo === null || assignedTo === undefined) {
+      return '';
+    }
+
+    if (currentUserId !== null && assignedTo === currentUserId) {
+      return this.currentUser.displayName || this.currentUser.email;
+    }
+
+    return `Usuario #${assignedTo}`;
+  }
+
   private persistTickets(tickets: TicketRecord[]): void {
     this.storage.setJson(this.ticketsStorageKey, tickets);
+  }
+
+  private persistGroups(groups: GroupOption[]): void {
+    this.storage.setJson(this.groupsStorageKey, groups);
   }
 }

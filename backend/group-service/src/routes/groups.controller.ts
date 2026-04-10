@@ -83,4 +83,26 @@ export class GroupsController {
     const result = await this.groupService.getGroupMembers(Number(id));
     return result;
   }
+
+  @Post(':id/members')
+  async addGroupMember(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.groupService.addGroupMember(Number(id), body.email);
+    res.status(result.statusCode);
+    return result;
+  }
+
+  @Delete(':id/members/:email')
+  async removeGroupMember(
+    @Param('id') id: string,
+    @Param('email') email: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.groupService.removeGroupMember(Number(id), email);
+    res.status(result.statusCode);
+    return result;
+  }
 }
