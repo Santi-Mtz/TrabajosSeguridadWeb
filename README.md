@@ -211,6 +211,62 @@ src/
 - `npm run build` → build de producción
 - `npm test` → pruebas unitarias
 
+## Backend (Iteracion 1)
+
+Se agrego una base minima para login end-to-end:
+
+- `backend/api-gateway` (Fastify, puerto `3000`)
+- `backend/user-service` (Fastify + PostgreSQL, puerto `3001`)
+
+### Flujo
+
+- Frontend -> `POST /auth/login` en Gateway
+- Gateway valida JSON Schema y reenvia a User Service
+- User Service valida credenciales contra PostgreSQL, registra `login_events` y responde contrato estandar
+
+### Contrato de respuesta
+
+```json
+{
+	"statusCode": 200,
+	"intOpCode": "USR_LOGIN_OK",
+	"message": "Login exitoso.",
+	"data": {
+		"id": 1,
+		"username": "admin",
+		"email": "admin@correo.com",
+		"login_date": "2026-04-07T18:00:00.000Z",
+		"permissions": ["ticket:view", "ticket:add", "user:view:all"]
+	}
+}
+```
+
+### Levantar servicios
+
+1. Copiar variables de entorno:
+	 - `backend/user-service/.env.example` -> `backend/user-service/.env`
+	 - `backend/api-gateway/.env.example` -> `backend/api-gateway/.env`
+2. Instalar dependencias por servicio:
+	 - `cd backend/user-service && npm install`
+	 - `cd backend/api-gateway && npm install`
+3. Ejecutar servicios:
+	 - `cd backend/user-service && npm run dev`
+	 - `cd backend/api-gateway && npm run dev`
+
+### Probar login
+
+Request al Gateway:
+
+```http
+POST http://localhost:3000/auth/login
+Content-Type: application/json
+
+{
+	"email": "admin@correo.com",
+	"password": "Admin123*"
+}
+```
+
 ## Dependencias notables
 
 | Paquete | Versión | Nota |

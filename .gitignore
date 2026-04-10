@@ -42,3 +42,13 @@ __screenshots__/
 .DS_Store
 Thumbs.db
 public/favicon.ico
+
+# Backend env files
+backend/**/.env
+backend/**/node_modules/
+
+# Local DB dump files
+schema.sql
+data.sql
+schema_supabase.sql
+data_supabase.sql
