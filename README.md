@@ -1,460 +1,151 @@
 # Practica_2
 
-Aplicación Angular + PrimeNG para gestión de tickets por grupos con navegación responsive, tablero Kanban, lista, perfil de usuario, administración de permisos y control de cuentas activas/inactivas.
+Aplicación full-stack para gestión de tickets por grupos: Angular 20 frontend con PrimeNG + microservicios Node/NestJS backend (Fastify + PostgreSQL/Supabase). Incluye navegación responsive, tablero Kanban, autenticación JWT, administración de permisos y control de cuentas activas/inactivas.
 
-## Estado actual
+## Instalación rápida
 
-- Versión visible: **1.6** (`src/app/app.ts`).
-- Flujo principal: `Landing -> Login -> Dashboard -> Grupo`.
-- Vistas implementadas: Login, Dashboard, Grupo (Kanban/Lista), Perfil de usuario, Gestión de grupo, Gestión de usuarios.
-- Persistencia local completa con `localStorage`.
+```bash
+# 1. Copiar configuración del entorno
+cp .env.example .env
+# Editar .env con credenciales locales (PostgreSQL, JWT_SECRET, URLs)
+
+# 2. Instalar dependencias
+npm install
+
+# 3. Ejecutar stack completo (servicios + frontend dev)
+.\start-stack.ps1
+```
+
+Acceder a: http://localhost:4200 (frontend) | http://localhost:3000 (API Gateway)
 
 ## Stack
 
+**Frontend:**
 - Angular 20 (`@angular/*` 20.3.x)
 - PrimeNG 20.4.0
-- PrimeIcons 7.0.0
 - TypeScript ~5.9.2
 
-Referencia: `package.json`
+**Backend:**
+- API Gateway: Fastify + rate limiting + JWT
+- Microservicios: NestJS (user-service, group-service, ticket-service)
+- Database: PostgreSQL (Supabase con SSL configurable)
+- Authentication: JWT tokens + Bearer validation
 
-## Rutas
+**DevOps:**
+- npm scripts para desarrollo local
+- PowerShell stack orchestration (`start-stack.ps1`)
+- Docker-ready (Dockerfile para cada servicio)
 
-- `/landing`
-- `/login`
-- `/register`
-- `/dashboard`
-- `/group`
-- `/user`
+## Rutas Frontend
 
-Rutas en `src/app/app.routes.ts`.
+- `/landing` - Página de bienvenida
+- `/login` - Autenticación
+- `/register` - Registro de usuarios
+- `/dashboard` - Panel principal con resumen de tickets por grupo
+- `/group` - Gestión de grupos y tickets (Kanban/Lista)
+- `/user` - Perfil de usuario y administración
 
-## Layout y navegación
+Definidas en `src/app/app.routes.ts`
 
-- Sidebar desktop colapsable + drawer móvil (`src/app/app.html`, `src/app/app.css`).
-- Navegación activa entre `Dashboard`, `Group` y `User`.
-- En `/landing`, `/login`, `/register` se usa layout sin sidebar.
+## Arquitectura Backend
 
-## Funcionalidades
+Los servicios se ejecutan en paralelo (orquestados por `start-stack.ps1`):
 
-### 1) Auth (frontend)
+| Servicio | Puerto | Función |
+|----------|--------|---------|
+| **api-gateway** | 3000 | Punto de entrada; enruta requests a microservicios; gestiona JWT |
+| **user-service** | 3001 | CRUD usuarios; autenticación; permisos |
+| **group-service** | 3003 | CRUD grupos y membresía |
+| **ticket-service** | 3002 | CRUD tickets; historial; comentarios |
 
-- Login con credenciales demo y persistencia de usuario actual en `auth.currentUser`.
-- Registro con validaciones de email, teléfono, contraseña robusta y mayoría de edad.
-- Bloqueo de acceso para cuentas desactivadas:
-	- Se impide iniciar sesión si el usuario está inactivo.
-	- Si un usuario es desactivado con sesión activa, los guards cierran su sesión y redirigen a `/login`.
+Cada servicio usa PostgreSQL con la misma base de datos (orquestación de esquemas).
 
-### 2) Dashboard
+## Variables de Entorno (.env)
 
-Ubicación: `src/app/pages/dashboard/`
+Copiadas desde `.env.example`. Variables principales:
 
-- Resumen global por estado.
-- Estados oficiales: `Pendiente`, `En progreso`, `Bloqueado`, `Hecho`.
-- Tarjetas por grupo con conteo por estado.
-- Acciones por grupo:
-	- Entrar al grupo
-	- Crear ticket (abre modal de creación en vista de grupo)
+```
+# API Gateway
+PORT=3000
+JWT_SECRET=<cambiar-en-producción>
+RATE_LIMIT_MAX=100
 
-### 3) Vista de Grupo
+# Servicios
+USER_SERVICE_URL=http://localhost:3001
+GROUP_SERVICE_URL=http://localhost:3003
+TICKET_SERVICE_URL=http://localhost:3002
 
-Ubicación: `src/app/pages/group/`
+# Base de datos
+DATABASE_URL=postgresql://user:pass@host:5432/bd
+DATABASE_SSL=false  # true para Supabase
+```
 
-- Selector de grupo activo.
-- Vistas: `Kanban` y `Lista`.
-- Kanban con drag & drop entre columnas para cambio de estado.
-- Detalle de ticket editable con reglas de permisos.
-- Historial de cambios y comentarios con autor/fecha.
-- Gestión de miembros del grupo (agregar por email / eliminar).
-- Gestión básica de espacio:
-	- Crear grupo
-	- Editar nombre de grupo
-	- Eliminar grupo
-- Accesos rápidos desde el contexto del grupo:
-	- Perfil de usuario
-	- Gestión de usuarios
+## Componentes Clave
 
-### 4) Crear Ticket (mínimo)
+### Autenticación
 
-- Campos:
-	- Título (obligatorio)
-	- Descripción
-	- Estado inicial (default: `Pendiente`)
-	- Asignado a (opcional)
-	- Prioridad (7 niveles en español)
-	- Fechas de creación y límite
-- Se abre desde Dashboard o Grupo.
-- Al crear:
-	- persiste en `board.tickets`
-	- aparece en Kanban/Lista
-	- abre automáticamente detalle del ticket creado
+- Login + registro con validaciones (email, teléfono, contraseña robusta, mayoría de edad)
+- JWT tokens almacenados en cookies y localStorage
+- Bloqueo automático de cuentas inactivas
+- Guards de ruta (`auth.guard.ts`, `permission.guard.ts`)
 
-### 5) Filtros rápidos
+### Dashboard
 
-Componente común en Grupo (afecta Kanban y Lista):
+- Resumen por estado (`Pendiente`, `En progreso`, `Bloqueado`, `Hecho`)
+- Tarjetas de grupo con conteo de tickets
+- Acceso directo a grupos y creación de tickets
 
-- `Mis tickets`
-- `Sin asignar`
-- `Prioridad alta`
-- `Todos` + botón `Limpiar rápidos`
+### Gestión de Grupos
 
-Además de filtros detallados:
-
-- Estado
-- Prioridad
-- Asignado
-- FC/FL (desde/hasta)
-- Orden por fechas/prioridad
-
-### 6) Perfil de Usuario
-
-Ubicación: `src/app/pages/user/`
-
-- Muestra y edita datos del usuario actual:
-	- `username`, `fullName`, `address`, `phone`, `birthDate`, `email`, `role`, `team`
-- Muestra tickets asignados al usuario actual.
-- Muestra resumen de carga:
-	- Abiertos
-	- En progreso
-	- Bloqueados
-	- Hechos
-
-### 7) Gestión de Usuarios
-
-Ubicación: `src/app/pages/user/`
-
-- Usuario `superAdmin` preconfigurado con todos los permisos.
-- CRUD de usuarios.
-- Activación / desactivación de usuarios.
-- Gestión de permisos por usuario:
-	- agregar/quitar permisos individuales
-	- agregar todos / quitar todos
-
-Permisos soportados:
-
-- Ticket:
-	- `ticket:add`, `ticket:view`, `ticket:edit`, `ticket:edit:status`, `ticket:edit:comment`, `ticket:edit:priority`, `ticket:edit:deadline`, `ticket:edit:assign`, `ticket:delete`
-- Group:
-	- `group:add`, `group:view`, `group:edit`, `group:remove`, `group:add:members`, `group:remove:members`
-- User:
-	- `user:add`, `user:view:all`, `user:edit`, `user:remove`, `user:edit:permissions`, `user:deactivate`, `user:activate`
-
-Acceso a secciones admin de usuarios:
-
-- Controlado por permisos de administración (`user:view:all`, `user:add`, `user:edit`, `user:remove`, `user:edit:permissions`, `user:activate`, `user:deactivate`)
-- Gestión de permisos controlada por `user:edit:permissions`
-
-## Reglas de permisos actuales
+- Vistas Kanban (drag & drop) y Lista
+- Filtros rápidos (`Mis tickets`, `Sin asignar`, `Prioridad alta`)
+- Historial de cambios y comentarios
+- Gestión de miembros (add/remove por email)
+- CRUD de grupos
 
 ### Tickets
 
-- `ticket:add`: crear tickets.
-- `ticket:view`: visualizar tickets.
-- `ticket:edit`: edición completa de ticket.
-- `ticket:edit:status`: cambiar estado.
-- `ticket:edit:comment`: agregar comentarios.
-- `ticket:edit:priority`: cambiar prioridad.
-- `ticket:edit:deadline`: cambiar fecha límite.
-- `ticket:edit:assign`: reasignar ticket.
-- `ticket:delete`: eliminar tickets.
-- Cambios se registran en historial.
+Campos: título, descripción, estado, prioridad (7 niveles), asignado, fechas límite  
+Permisos granulares: `ticket:add`, `ticket:view`, `ticket:edit`, `ticket:edit:status`, `ticket:edit:*`, `ticket:delete`
 
-### Grupo
+### Perfil y Administración de Usuarios
 
-- `group:view`: visualizar sección de grupos.
-- `group:add`: crear grupo.
-- `group:edit`: editar nombre del grupo.
-- `group:remove`: eliminar grupo.
-- `group:add:members`: agregar miembros.
-- `group:remove:members`: remover miembros.
+- Edición de datos personales
+- Vista de tickets asignados
+- Panel admin con CRUD usuarios, activación/desactivación
+- Gestión de permisos por usuario/grupo
+- Usuario superAdmin preconfigurado
 
-### Usuarios
+## Permisos Soportados
 
-- `user:add`: crear usuarios.
-- `user:view:all`: ver listado completo.
-- `user:edit`: editar usuarios.
-- `user:remove`: eliminar usuarios (excepto superAdmin y usuario activo).
-- `user:edit:permissions`: administrar permisos por usuario.
-- `user:deactivate`: desactivar cuentas.
-- `user:activate`: activar cuentas.
-
-## LocalStorage
-
-- `auth.currentUser`: usuario autenticado actual.
-- `crud.users`: catálogo de usuarios (incluye estado `isActive`).
-- `crud.user.permissions`: permisos por usuario.
-- `crud.groups`: grupos.
-- `board.group.permissions`: permisos por grupo.
-- `board.group.members`: miembros por grupo.
-- `board.tickets`: tickets.
-
-## Estructura relevante
-
-```text
-src/
-	app/
-		app.config.ts
-		app.routes.ts
-		app.ts / app.html / app.css
-		pages/
-			landing/
-			login/
-			register/
-			dashboard/
-			group/
-			user/
-```
+**Tickets:** add, view, edit (completo, status, comment, priority, deadline, assign), delete  
+**Grupos:** view, add, edit, remove, add:members, remove:members  
+**Usuarios:** add, view:all, edit, remove, edit:permissions, deactivate, activate
 
 ## Scripts
 
-- `npm start` → servidor de desarrollo
-- `npm run build` → build de producción
-- `npm test` → pruebas unitarias
-
-## Backend (Iteracion 1)
-
-Se agrego una base minima para login end-to-end:
-
-- `backend/api-gateway` (Fastify, puerto `3000`)
-- `backend/user-service` (NestJS + PostgreSQL, puerto `3001`)
-- `backend/group-service` (NestJS, puerto `3003`)
-
-### Flujo
-
-- Frontend -> `POST /auth/login` en Gateway
-- Gateway valida JSON Schema y reenvia a User Service (NestJS)
-- User Service valida credenciales contra PostgreSQL, registra `login_events` y responde contrato estandar
-
-### Contrato de respuesta
-
-```json
-{
-	"statusCode": 200,
-	"intOpCode": "USR_LOGIN_OK",
-	"message": "Login exitoso.",
-	"data": {
-		"id": 1,
-		"username": "admin",
-		"email": "admin@correo.com",
-		"login_date": "2026-04-07T18:00:00.000Z",
-		"permissions": ["ticket:view", "ticket:add", "user:view:all"]
-	}
-}
+```bash
+npm start         # Servidor Angular dev
+npm run build     # Build producción
+npm test          # Tests unitarios
+npm run lint      # ESLint
+.\start-stack.ps1 # Orquestar todo (frontend + 4 servicios backend)
 ```
 
-### Levantar servicios
+## Estructura
 
-1. Copiar variables de entorno:
-	 - `backend/user-service/.env.example` -> `backend/user-service/.env`
-	 - `backend/group-service/.env.example` -> `backend/group-service/.env`
-	 - `backend/api-gateway/.env.example` -> `backend/api-gateway/.env`
-2. Instalar dependencias por servicio:
-	 - `cd backend/user-service && npm install`
-	 - `cd backend/group-service && npm install`
-	 - `cd backend/api-gateway && npm install`
-3. Ejecutar servicios:
-	 - `cd backend/user-service && npm run dev`
-	 - `cd backend/group-service && npm run dev`
-	 - `cd backend/api-gateway && npm run dev`
-
-### Probar login
-
-## Deploy con Docker Compose
-
-Se agrego despliegue completo para frontend, API Gateway, microservicios y PostgreSQL.
-
-Archivos clave:
-
-- `docker-compose.yml`
-- `Dockerfile.frontend`
-- `docker/nginx/default.conf`
-- `backend/*/Dockerfile`
-
-### Requisitos
-
-- Docker Desktop (Windows) o Docker Engine + Compose
-
-### Levantar todo el sistema
-
-1. Desde la raiz del proyecto:
-	- `docker compose up --build -d`
-2. Verificar estado:
-	- `docker compose ps`
-3. Endpoints esperados:
-	- Frontend: `http://localhost:8080`
-	- API Gateway: `http://localhost:3000/health`
-	- User service: `http://localhost:3001/health`
-	- Group service: `http://localhost:3003/health`
-	- Ticket service: `http://localhost:3002/health`
-
-### Apagar stack
-
-- `docker compose down`
-
-### Reiniciar desde cero (incluyendo base de datos)
-
-- `docker compose down -v`
-- `docker compose up --build -d`
-
-### Base de datos inicial
-
-El contenedor de PostgreSQL inicializa esquema y datos con:
-
-- `schema_supabase.sql`
-- `data_supabase.sql`
-
-Esto permite tener usuarios/permisos de prueba listos despues del primer arranque.
-
-## Deploy de Produccion
-
-Se agrego un perfil de produccion con reverse proxy TLS usando Caddy.
-
-Archivos clave:
-
-- `docker-compose.prod.yml`
-- `docker/caddy/Caddyfile`
-- `.env.prod.example`
-
-### Configuracion
-
-1. Copia `.env.prod.example` a `.env.prod` y ajusta `DOMAIN_NAME`.
-2. Levanta el stack base junto con el overlay de produccion:
-	- `docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up --build -d`
-3. Accede al sitio por HTTPS:
-	- `https://<DOMAIN_NAME>`
-
-### Notas
-
-- Caddy usa certificados internos en `localhost` para desarrollo local.
-- En un dominio real, cambia `DOMAIN_NAME` por tu host publico y abre puertos 80/443.
-- El frontend ya consume el gateway mediante `/api`, por lo que el proxy puede enrutar sin cambios adicionales.
-
-Request al Gateway:
-
-```http
-POST http://localhost:3000/auth/login
-Content-Type: application/json
-
-{
-	"email": "admin@correo.com",
-	"password": "Admin123*"
-}
 ```
-
-### Codigos de operacion (intOpCode)
-
-- `USR_LOGIN_OK`: login exitoso.
-- `USR_LOGIN_INVALID`: credenciales invalidas.
-- `USR_LOGIN_INACTIVE`: cuenta inactiva.
-- `USR_LOGIN_ERROR`: error interno en user-service.
-- `GW_UPSTREAM_ERROR`: gateway no pudo contactar user-service.
-
-### Pruebas de aceptacion login
-
-1. Login valido (`200`):
-	- `email`: `admin_actualizado@correo.com`
-	- `password`: `NuevaPass123*`
-	- esperado: `USR_LOGIN_OK` y `data` con `id`, `username`, `email`, `login_date`, `permissions`.
-2. Password invalida (`401`):
-	- `email`: `admin_actualizado@correo.com`
-	- `password`: incorrecta
-	- esperado: `USR_LOGIN_INVALID`.
-3. Usuario inactivo (`403`):
-	- desactivar temporalmente el usuario en DB (`is_active = false`).
-	- esperado: `USR_LOGIN_INACTIVE`.
-
-Consulta para desactivar/reactivar usuario de prueba:
-
-```sql
-UPDATE public.users SET is_active = false WHERE email = 'nuevo@correo.com';
-UPDATE public.users SET is_active = true WHERE email = 'nuevo@correo.com';
+src/app/
+  pages/
+    landing/          # Página de bienvenida
+    login/            # Autenticación
+    register/         # Registro
+    dashboard/        # Panel principal
+    group/            # Gestión de grupos y tickets
+    user/             # Perfil y admin
+backend/
+  api-gateway/        # Fastify router (puerto 3000)
+  user-service/       # NestJS (puerto 3001)
+  group-service/      # NestJS (puerto 3003)
+  ticket-service/     # Node.js (puerto 3002)
 ```
-
-## Dependencias notables
-
-| Paquete | Versión | Nota |
-|---|---|---|
-| `@angular/core` | ~20.3.x | Framework principal |
-| `primeng` | ^20.4.0 | Librería de UI |
-| `zone.js` | ^0.15.1 | Requerido por PrimeNG 20 para detección de cambios |
-
-## Limitaciones actuales
-
-- No hay backend real ni base de datos remota.
-- Autenticación/roles persisten en localStorage (entorno demo).
-- Control de acceso dependiente de información local (localStorage), sin validación server-side.
-
-## Historial de cambios
-
-### v1.8 — Marzo 2026
-
-#### Seguridad y autorización
-- Implementación de `authGuard` y `permissionGuard` para proteger rutas privadas.
-- Normalización del modelo mínimo de permisos en dominios Ticket, Group y User.
-- Migración de permisos legacy almacenados en localStorage para mantener compatibilidad.
-
-#### Gestión de usuarios
-- Estado `isActive` por usuario en `crud.users`.
-- Botón PrimeNG para `Activar/Desactivar` en listado de usuarios.
-- Bloqueo de login para cuentas desactivadas.
-- Expulsión de sesión cuando una cuenta activa es desactivada posteriormente.
-
----
-
-### v1.7 — Julio 2025
-
-#### Correcciones de compatibilidad PrimeNG 20
-- `<p-inputtext [(ngModel)]>` → `<input pInputText [(ngModel)]>` en login, register, group, user.
-  - En PrimeNG 20 `p-inputtext` y `p-textarea` son *componentes de presentación*, **no** implementan `ControlValueAccessor`; el binding `[(ngModel)]` debe hacerse sobre el elemento nativo con la directiva.
-- `<p-textarea [(ngModel)]>` → `<textarea pTextarea [(ngModel)]>` en group.
-- Todos los `[(ngModel)]` sin `FormGroup`/`name` llevan ahora `[ngModelOptions]="{standalone: true}"` (login, register, group, user, dashboard).
-
-#### Integración de zone.js
-- `zone.js ^0.15.1` añadido como dependencia directa (`npm install zone.js --save`).
-- `import 'zone.js'` agregado como primera línea de `src/main.ts`.
-- `provideZonelessChangeDetection()` reemplazado por `provideZoneChangeDetection({ eventCoalescing: true })` en `app.config.ts`.
-  - PrimeNG 20 requiere zone.js activo para gestionar el ciclo de vida de sus componentes internos.
-
-#### Carga bajo demanda (Lazy Loading)
-- Todos los componentes de ruta migrados a `loadComponent` con imports dinámicos en `app.routes.ts`.
-- Los chunks solo se descargan al navegar por primera vez a la ruta.
-- `withPreloading(PreloadAllModules)` añadido al router: tras la carga inicial, Angular descarga el resto de chunks en segundo plano para que las navegaciones siguientes sean instantáneas.
-
-#### Optimización de Change Detection
-- `ChangeDetectionStrategy.OnPush` aplicado a `GroupComponent`, `UserComponent` y `DashboardComponent`.
-- `ChangeDetectorRef.markForCheck()` llamado dentro de los callbacks `subscribe()` de `queryParamMap` (group y user) para que la vista se actualice al cambiar parámetros de ruta.
-- Template de kanban: variable `@let statusTickets = ticketsByStatus(status)` por columna, reduciendo las llamadas al método de 15 a 5 por ciclo de detección de cambios.
-
----
-
-### v1.6 — Marzo 2026
-
-#### Nuevas funcionalidades
-- Estado **Revisión** añadido a todos los componentes (`group`, `dashboard`, `user`).
-- Mini-listas en Dashboard: *Tickets recientes* y *Mis tickets* por grupo seleccionado.
-- Flujo toggle para crear grupo (botón **Nuevo grupo / Cancelar**) sin salir de la vista.
-- Botón **Limpiar todo** que resetea los 8 filtros simultáneamente.
-- Kanban con 5 columnas y scroll horizontal (`grid-auto-flow: column; overflow-x: auto`).
-
-#### Autorización
-- Eliminada la dependencia del campo `role` en todos los componentes.
-- Acceso 100% basado en permisos (`group:add/edit/delete`, `ticket:*`, `user:*`).
-
-#### UI — Migración completa a PrimeNG
-- `<input type="date">` en registro → `p-datepicker`.
-- `<input pInputText>` → `<p-inputtext>` en login, register, group, user.
-- `<textarea pTextarea>` → `<p-textarea>` en group.
-- `<small>` con validaciones → `<p-message>` con severidad correcta en login y register.
-- Textos de prioridades en chino → español: `Muy baja`, `Baja`, `Media-baja`, `Media`, `Media-alta`, `Alta`, `Urgente`.
-
-#### Refactorización y optimización de código
-- `group.component.ts`: 1350 → 1255 líneas (**−95**).
-- `user.component.ts`: 864 → 829 líneas (**−35**).
-- **Switch statements** de severidad y peso de prioridad reemplazados por lookup maps (`STATUS_SEV`, `PRIORITY_SEV`, `PRIORITY_W`).
-- `normalizeStatus` / `normalizePriority` simplificados con `Array.includes()`.
-- Métodos `persist*` unificados en un helper `persist(key, value)` de 2 líneas.
-- `isTicketCreator` / `isTicketAssignee` fusionados en `matchesCurrentUser(ticket, field)`.
-- `startOfDay` / `endOfDay` / `toDate` / `normalizeBirthDate` reducidos a one-liners.
-
-una base de datos que cumpla con las queris para completar, mostrar y verificar acciones del login
-dvuelve id usuario correo fecha del login y permisos
