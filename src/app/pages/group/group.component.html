@@ -44,9 +44,7 @@
   </div>
 
   <div class="top-actions-row">
-    @if (canCreateTickets) {
-      <p-button label="Crear ticket" icon="pi pi-plus" (onClick)="openCreateDialog()" />
-    }
+    <p-button *appHasPermission="'tickets:add'" label="Crear ticket" icon="pi pi-plus" (onClick)="openCreateDialog()" />
     @if (canCreateGroup) {
       <p-button
         [label]="showCreateGroupForm ? 'Cancelar grupo' : 'Nuevo grupo'"
@@ -90,6 +88,9 @@
         <td>{{ ticket.createdAt }}</td>
         <td>
           <p-button label="Detalle" size="small" severity="secondary" (onClick)="openTicketDetail(ticket)" />
+          @if (canMoveTicketByButton(ticket)) {
+            <p-button label="Mover estado" size="small" severity="contrast" (onClick)="moveTicketForward(ticket)" />
+          }
         </td>
       </tr>
     </ng-template>
@@ -355,6 +356,15 @@
                   (onClick)="openTicketDetail(ticket)"
                   styleClass="w-full"
                 />
+                @if (canMoveTicketByButton(ticket)) {
+                  <p-button
+                    label="Mover estado"
+                    size="small"
+                    severity="contrast"
+                    (onClick)="moveTicketForward(ticket)"
+                    styleClass="w-full"
+                  />
+                }
               </div>
 
               <div class="cdk-drag-placeholder-custom" *cdkDragPlaceholder></div>
@@ -372,15 +382,23 @@
 
 @if (viewMode === 'list') {
   <p-card header="Tickets en lista" subheader="Vista de listado con filtros y ordenamiento" styleClass="group-card">
-    <p-table [value]="filteredTickets" styleClass="p-datatable-sm">
+    <p-table
+      [value]="filteredTickets"
+      styleClass="p-datatable-sm"
+      [paginator]="true"
+      [rows]="8"
+      [rowsPerPageOptions]="[5, 8, 12, 20]"
+      [showCurrentPageReport]="true"
+      currentPageReportTemplate="Mostrando {first} a {last} de {totalRecords} tickets"
+    >
       <ng-template pTemplate="header">
         <tr>
-          <th scope="col">ID / Título</th>
-          <th scope="col">Estado</th>
-          <th scope="col">Asignado</th>
-          <th scope="col">Prioridad</th>
-          <th scope="col">F. creación</th>
-          <th scope="col">F. límite</th>
+          <th scope="col" pSortableColumn="id">ID / Título <p-sortIcon field="id" /></th>
+          <th scope="col" pSortableColumn="status">Estado <p-sortIcon field="status" /></th>
+          <th scope="col" pSortableColumn="assignedTo">Asignado <p-sortIcon field="assignedTo" /></th>
+          <th scope="col" pSortableColumn="priority">Prioridad <p-sortIcon field="priority" /></th>
+          <th scope="col" pSortableColumn="createdAt">F. creación <p-sortIcon field="createdAt" /></th>
+          <th scope="col" pSortableColumn="dueDate">F. límite <p-sortIcon field="dueDate" /></th>
           <th scope="col">Acciones</th>
         </tr>
       </ng-template>
@@ -398,6 +416,9 @@
           <td>{{ ticket.dueDate }}</td>
           <td>
             <p-button label="Detalle" size="small" severity="secondary" (onClick)="openTicketDetail(ticket)" />
+            @if (canMoveTicketByButton(ticket)) {
+              <p-button label="Mover estado" size="small" severity="contrast" (onClick)="moveTicketForward(ticket)" />
+            }
           </td>
         </tr>
       </ng-template>

@@ -51,7 +51,7 @@ function Start-Service($service) {
   Start-Process powershell -ArgumentList @(
     '-NoExit',
     '-Command',
-    "Set-Location '$($service.Path)'; npm run dev"
+    "Set-Location '$($service.Path)'; npm.cmd run dev"
   ) | Out-Null
 }
 

@@ -259,6 +259,76 @@ Se agrego una base minima para login end-to-end:
 
 ### Probar login
 
+## Deploy con Docker Compose
+
+Se agrego despliegue completo para frontend, API Gateway, microservicios y PostgreSQL.
+
+Archivos clave:
+
+- `docker-compose.yml`
+- `Dockerfile.frontend`
+- `docker/nginx/default.conf`
+- `backend/*/Dockerfile`
+
+### Requisitos
+
+- Docker Desktop (Windows) o Docker Engine + Compose
+
+### Levantar todo el sistema
+
+1. Desde la raiz del proyecto:
+	- `docker compose up --build -d`
+2. Verificar estado:
+	- `docker compose ps`
+3. Endpoints esperados:
+	- Frontend: `http://localhost:8080`
+	- API Gateway: `http://localhost:3000/health`
+	- User service: `http://localhost:3001/health`
+	- Group service: `http://localhost:3003/health`
+	- Ticket service: `http://localhost:3002/health`
+
+### Apagar stack
+
+- `docker compose down`
+
+### Reiniciar desde cero (incluyendo base de datos)
+
+- `docker compose down -v`
+- `docker compose up --build -d`
+
+### Base de datos inicial
+
+El contenedor de PostgreSQL inicializa esquema y datos con:
+
+- `schema_supabase.sql`
+- `data_supabase.sql`
+
+Esto permite tener usuarios/permisos de prueba listos despues del primer arranque.
+
+## Deploy de Produccion
+
+Se agrego un perfil de produccion con reverse proxy TLS usando Caddy.
+
+Archivos clave:
+
+- `docker-compose.prod.yml`
+- `docker/caddy/Caddyfile`
+- `.env.prod.example`
+
+### Configuracion
+
+1. Copia `.env.prod.example` a `.env.prod` y ajusta `DOMAIN_NAME`.
+2. Levanta el stack base junto con el overlay de produccion:
+	- `docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up --build -d`
+3. Accede al sitio por HTTPS:
+	- `https://<DOMAIN_NAME>`
+
+### Notas
+
+- Caddy usa certificados internos en `localhost` para desarrollo local.
+- En un dominio real, cambia `DOMAIN_NAME` por tu host publico y abre puertos 80/443.
+- El frontend ya consume el gateway mediante `/api`, por lo que el proxy puede enrutar sin cambios adicionales.
+
 Request al Gateway:
 
 ```http

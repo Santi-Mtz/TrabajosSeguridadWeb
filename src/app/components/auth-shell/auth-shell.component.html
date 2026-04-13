@@ -6,7 +6,7 @@
 >
   <p-card styleClass="auth-card" [style]="{ overflow: 'hidden' }">
     <ng-template pTemplate="header">
-      <img [alt]="heroAltText" class="auth-hero-image" [src]="imageSrc" />
+      <img [alt]="heroAltText" class="auth-hero-image" [src]="imageSrc" (click)="onHeroImageClick()" />
     </ng-template>
 
     <ng-template pTemplate="title">

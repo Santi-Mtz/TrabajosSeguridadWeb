@@ -5,12 +5,13 @@
 }
 
 .dashboard {
-	display: grid;
-	grid-template-columns: 16rem minmax(0, 1fr);
-	gap: 1rem;
+	--sidebar-width: 16rem;
+	position: relative;
+	width: 100%;
+	max-width: 100%;
 	min-height: 100dvh;
-	padding: 1rem;
-	transition: grid-template-columns 0.2s ease;
+	padding: 1rem 1rem 1rem calc(var(--sidebar-width) + 2rem);
+	transition: none;
 }
 
 .plain-view {
@@ -25,19 +26,29 @@
 	border: 1px solid var(--p-surface-200);
 	border-radius: 1rem;
 	padding: 0.75rem;
-	position: sticky;
-	top: 1rem;
-	height: calc(100dvh - 2rem);
+	width: 100%;
+	height: auto;
+	max-height: calc(100dvh - 2rem);
+	overflow-y: auto;
+	overflow-x: hidden;
+	transition: width 0.2s ease, min-width 0.2s ease, max-width 0.2s ease;
 }
 
 .sidebar-desktop {
 	display: flex;
+	position: fixed;
+	top: 1rem;
+	left: 1rem;
+	width: var(--sidebar-width);
+	z-index: 20;
+	transition: width 0.2s ease;
 }
 
 .sidebar-nav {
 	display: flex;
 	flex-direction: column;
 	gap: 0.5rem;
+	flex-shrink: 0;
 }
 
 .mobile-topbar {
@@ -60,8 +71,23 @@
 	width: 100%;
 }
 
+:host ::ng-deep .sidebar-desktop .p-button {
+	min-height: 2.75rem;
+}
+
+:host ::ng-deep .sidebar-desktop .p-button-label {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .sidebar-collapsed {
-	grid-template-columns: 4.5rem minmax(0, 1fr);
+	--sidebar-width: 4.5rem;
+}
+
+.sidebar-collapsed .content,
+.sidebar-collapsed .content > * {
+	transition: none !important;
 }
 
 .dashboard.sidebar-collapsed ::ng-deep .sidebar-desktop .p-button-label {
@@ -70,10 +96,11 @@
 
 .dashboard.sidebar-collapsed ::ng-deep .sidebar-desktop .p-button {
 	justify-content: center;
-	width: 2.75rem;
-	height: 2.75rem;
+	width: 3rem;
+	height: 3rem;
 	padding: 0;
 	margin: 0 auto;
+	flex-shrink: 0;
 }
 
 .dashboard.sidebar-collapsed ::ng-deep .sidebar-desktop .p-button-icon {
@@ -82,7 +109,7 @@
 
 .version {
 	margin: 0;
-	margin-top: auto;
+	margin-top: 0.5rem;
 	padding-top: 0.5rem;
 	text-align: center;
 	color: var(--p-text-muted-color);
@@ -93,10 +120,16 @@
 	padding: 1rem;
 	display: grid;
 	align-content: start;
+	width: 100%;
+	min-width: 0;
 	min-height: calc(100dvh - 2rem);
 	background: var(--p-surface-0);
 	border: 1px solid var(--p-surface-200);
 	border-radius: 1rem;
+}
+
+.content > * {
+	min-width: 0;
 }
 
 .content--full {
@@ -107,7 +140,6 @@
 
 @media (max-width: 960px) {
 	.dashboard {
-		grid-template-columns: 1fr;
 		padding: 0.75rem;
 	}
 

@@ -10,6 +10,7 @@ import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { AuthSessionService, AuthSessionUser } from '../../services/auth-session.service';
 import { AppPermission } from '../../services/authorization.service';
+import { StorageService } from '../../services/storage.service';
 import { ValidationService } from '../../services/validation.service';
 import { WorkboardApiService } from '../../services/workboard-api.service';
 import { UserFormComponent } from '../../components/user-form/user-form.component';
@@ -59,6 +60,13 @@ type TicketRecord = {
   history: string[];
 };
 
+type GroupOption = {
+  id: number;
+  name: string;
+};
+
+type GroupScopedPermissionMap = Record<string, Record<string, UserPermission[]>>;
+
 @Component({
   selector: 'app-user',
   standalone: true,
@@ -82,10 +90,13 @@ export class UserComponent implements OnInit {
     private readonly route: ActivatedRoute,
     private readonly cdr: ChangeDetectorRef,
     private readonly authSession: AuthSessionService,
+    private readonly storage: StorageService,
     private readonly validation: ValidationService,
     private readonly workboardApi: WorkboardApiService
   ) {}
   private readonly superAdminEmail = 'superadmin@seguridadweb.com';
+  private readonly securityAdminEmail = 'admin@seguridadweb.com';
+  private readonly groupPermissionStorageKey = 'crud.user.permissions.byGroup';
 
   readonly allPermissions: UserPermission[] = [
     'ticket:add',
@@ -186,6 +197,9 @@ export class UserComponent implements OnInit {
   users: UserRecord[] = [...this.defaultUsers];
   tickets: TicketRecord[] = [];
   permissionsByUser: Record<string, UserPermission[]> = { ...this.defaultPermissionsByUser };
+  permissionGroups: GroupOption[] = [];
+  selectedPermissionGroupId: number | null = null;
+  permissionsByUserAndGroup: GroupScopedPermissionMap = {};
 
   profileForm: UserFormModel = this.createEmptyForm();
   userCrudForm: UserFormModel = this.createEmptyForm();
@@ -202,12 +216,21 @@ export class UserComponent implements OnInit {
   }
 
   private async loadFromApi(): Promise<void> {
-    await this.loadUsers();
+    await Promise.all([
+      this.loadUsers(),
+      this.loadTickets(),
+      this.loadPermissionGroups()
+    ]);
     await this.loadPermissions();
-    await this.loadTickets();
+    this.loadGroupScopedPermissions();
     this.ensureCurrentProfile();
     this.resetUserCrudForm();
     this.selectedPermissionUserId = this.users[0]?.id ?? null;
+    if (this.sourceGroupId !== null && this.permissionGroups.some((group) => group.id === this.sourceGroupId)) {
+      this.selectedPermissionGroupId = this.sourceGroupId;
+    } else {
+      this.selectedPermissionGroupId = this.permissionGroups[0]?.id ?? null;
+    }
     this.cdr.markForCheck();
   }
 
@@ -219,6 +242,19 @@ export class UserComponent implements OnInit {
     const byIdentity = this.currentUser.email.trim().toLowerCase() === this.superAdminEmail;
     const byUsername = this.profileForm.username.trim() === 'superAdmin';
     return byIdentity || byUsername;
+  }
+
+  private isProtectedAdminAccount(email: string): boolean {
+    const normalizedEmail = email.trim().toLowerCase();
+    return normalizedEmail === this.superAdminEmail || normalizedEmail === this.securityAdminEmail;
+  }
+
+  private isProtectedAdminUser(user: UserRecord): boolean {
+    return (
+      user.username === 'superAdmin'
+      || user.email.toLowerCase() === this.superAdminEmail
+      || user.email.toLowerCase() === this.securityAdminEmail
+    );
   }
 
   get currentUserPermissions(): UserPermission[] {
@@ -295,6 +331,32 @@ export class UserComponent implements OnInit {
     }
 
     return this.getPermissionsForEmail(user.email);
+  }
+
+  get permissionGroupOptions(): Array<{ label: string; value: number }> {
+    return this.permissionGroups.map((group) => ({ label: group.name, value: group.id }));
+  }
+
+  get selectedPermissionGroupName(): string {
+    if (this.selectedPermissionGroupId === null) {
+      return 'Sin grupo';
+    }
+
+    return this.permissionGroups.find((group) => group.id === this.selectedPermissionGroupId)?.name ?? `Grupo ${this.selectedPermissionGroupId}`;
+  }
+
+  get selectedPermissionGroupPermissions(): UserPermission[] {
+    const user = this.selectedPermissionUser;
+    const groupId = this.selectedPermissionGroupId;
+    if (!user || groupId === null) {
+      return [];
+    }
+
+    const email = user.email.toLowerCase();
+    const groupMap = this.permissionsByUserAndGroup[email] ?? {};
+    const groupPermissions = groupMap[String(groupId)];
+
+    return Array.isArray(groupPermissions) ? groupPermissions : [];
   }
 
   get assignedTickets(): TicketRecord[] {
@@ -390,29 +452,25 @@ export class UserComponent implements OnInit {
         });
 
       const savedUser = this.mapApiUserToView(saved);
-      const existingIndex = this.users.findIndex((user) => user.id === savedUser.id);
-
-      if (existingIndex >= 0) {
-        this.users = this.users.map((user, index) => (index === existingIndex ? savedUser : user));
-      } else {
-        this.users = [...this.users, savedUser];
-      }
-
       this.profileForm.id = savedUser.id;
+
+      this.authSession.setCurrentUser({
+        id: savedUser.id,
+        email: savedUser.email,
+        displayName: savedUser.fullName
+      });
+
+      this.currentUser = {
+        id: savedUser.id,
+        email: savedUser.email,
+        displayName: savedUser.fullName
+      };
+
+      await this.refreshUsersAndPermissions();
     } catch (error) {
       this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible guardar el perfil.');
       return;
     }
-
-    this.authSession.setCurrentUser({
-      email: normalized.email,
-      displayName: normalized.fullName
-    });
-
-    this.currentUser = {
-      email: normalized.email,
-      displayName: normalized.fullName
-    };
 
     this.pushNotification('success', 'Operación completada', 'El perfil se actualizó correctamente.');
   }
@@ -452,6 +510,8 @@ export class UserComponent implements OnInit {
       }
     }
 
+    await this.refreshUsersAndPermissions();
+
     this.resetUserCrudForm();
   }
 
@@ -481,13 +541,10 @@ export class UserComponent implements OnInit {
     }
 
     try {
-      const created = await this.workboardApi.createUser({
+      await this.workboardApi.createUser({
         ...this.toApiUserPayload(normalized),
         is_active: true
       });
-      const newUser = this.mapApiUserToView(created);
-      this.users = [...this.users, newUser];
-      this.permissionsByUser[newUser.email.toLowerCase()] = [];
       this.pushNotification('success', 'Operación completada', 'El usuario se creó correctamente.');
       return true;
     } catch (error) {
@@ -503,19 +560,7 @@ export class UserComponent implements OnInit {
     }
 
     try {
-      const updated = await this.workboardApi.updateUser(this.editingUserId as number, this.toApiUserPayload(normalized));
-      const updatedUser = this.mapApiUserToView(updated);
-      const previous = this.users.find((user) => user.id === this.editingUserId);
-
-      this.users = this.users.map((user) => (user.id === this.editingUserId ? updatedUser : user));
-
-      if (previous && previous.email !== updatedUser.email) {
-        const oldKey = previous.email.toLowerCase();
-        const newKey = updatedUser.email.toLowerCase();
-        const existingPerms = this.permissionsByUser[oldKey] ?? [];
-        delete this.permissionsByUser[oldKey];
-        this.permissionsByUser[newKey] = [...new Set(existingPerms)];
-      }
+      await this.workboardApi.updateUser(this.editingUserId as number, this.toApiUserPayload(normalized));
 
       this.pushNotification('success', 'Operación completada', 'La información del usuario se actualizó correctamente.');
       return true;
@@ -545,8 +590,8 @@ export class UserComponent implements OnInit {
       return;
     }
 
-    if (user.username === 'superAdmin' || user.email.toLowerCase() === this.superAdminEmail) {
-      this.pushNotification('error', 'Operación no permitida', 'No es posible eliminar la cuenta superAdmin.');
+    if (this.isProtectedAdminUser(user)) {
+      this.pushNotification('error', 'Operación no permitida', 'No es posible eliminar cuentas de administración protegidas.');
       return;
     }
 
@@ -557,16 +602,10 @@ export class UserComponent implements OnInit {
 
     try {
       await this.workboardApi.deleteUser(user.id);
+      await this.refreshUsersAndPermissions();
     } catch (error) {
       this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible eliminar el usuario.');
       return;
-    }
-
-    this.users = this.users.filter((item) => item.id !== user.id);
-    delete this.permissionsByUser[user.email.toLowerCase()];
-
-    if (this.selectedPermissionUserId === user.id) {
-      this.selectedPermissionUserId = this.users[0]?.id ?? null;
     }
 
     this.resetUserCrudForm();
@@ -576,9 +615,8 @@ export class UserComponent implements OnInit {
   async toggleUserActive(user: UserRecord): Promise<void> {
     this.notification = null;
 
-    const isTargetSuperAdmin = user.username === 'superAdmin' || user.email.toLowerCase() === this.superAdminEmail;
-    if (isTargetSuperAdmin) {
-      this.pushNotification('error', 'Operación no permitida', 'La cuenta superAdmin debe permanecer activa.');
+    if (this.isProtectedAdminUser(user)) {
+      this.pushNotification('error', 'Operación no permitida', 'Las cuentas de administración protegidas deben permanecer activas.');
       return;
     }
 
@@ -601,12 +639,12 @@ export class UserComponent implements OnInit {
     const nextState = !user.isActive;
     try {
       await this.workboardApi.setUserActive(user.id, nextState);
+      await this.refreshUsersAndPermissions();
     } catch (error) {
       this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible actualizar el estado del usuario.');
       return;
     }
 
-    this.users = this.users.map((item) => (item.id === user.id ? { ...item, isActive: nextState } : item));
     this.pushNotification(
       'success',
       'Operación completada',
@@ -632,8 +670,8 @@ export class UserComponent implements OnInit {
       return;
     }
 
-    if (user.username === 'superAdmin' || user.email.toLowerCase() === this.superAdminEmail) {
-      this.pushNotification('error', 'Operación no permitida', 'La cuenta superAdmin conserva todos los permisos por política del sistema.');
+    if (this.isProtectedAdminUser(user)) {
+      this.pushNotification('error', 'Operación no permitida', 'Las cuentas de administración protegidas conservan todos los permisos por política del sistema.');
       return;
     }
 
@@ -648,11 +686,108 @@ export class UserComponent implements OnInit {
     try {
       const saved = await this.workboardApi.setUserPermissions(user.id, this.permissionsByUser[email]);
       this.permissionsByUser[email] = saved.filter((item): item is UserPermission => this.allPermissions.includes(item as UserPermission));
+      await this.refreshUsersAndPermissions();
     } catch (error) {
       this.permissionsByUser[email] = current;
       this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible actualizar permisos.');
       return;
     }
+  }
+
+  hasPermissionInSelectedGroup(permission: UserPermission): boolean {
+    return this.selectedPermissionGroupPermissions.includes(permission);
+  }
+
+  async togglePermissionInSelectedGroup(permission: UserPermission): Promise<void> {
+    this.notification = null;
+
+    if (!this.canManagePermissions) {
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para administrar permisos por grupo.');
+      return;
+    }
+
+    const user = this.selectedPermissionUser;
+    const groupId = this.selectedPermissionGroupId;
+    if (!user || groupId === null) {
+      return;
+    }
+
+    if (this.isProtectedAdminUser(user)) {
+      this.pushNotification('error', 'Operación no permitida', 'Las cuentas de administración protegidas conservan todos los permisos por política del sistema.');
+      return;
+    }
+
+    const email = user.email.toLowerCase();
+    const groupKey = String(groupId);
+    const current = this.selectedPermissionGroupPermissions;
+    const next = current.includes(permission)
+      ? current.filter((item) => item !== permission)
+      : [...current, permission];
+
+    const currentGroupMap = this.permissionsByUserAndGroup[email] ?? {};
+    this.permissionsByUserAndGroup[email] = {
+      ...currentGroupMap,
+      [groupKey]: [...new Set(next)]
+    };
+
+    this.persistGroupScopedPermissions();
+    this.pushNotification('success', 'Operación completada', `Permisos por grupo actualizados para ${user.username}.`);
+  }
+
+  async addAllPermissionsToSelectedGroup(): Promise<void> {
+    if (!this.canManagePermissions) {
+      return;
+    }
+
+    const user = this.selectedPermissionUser;
+    const groupId = this.selectedPermissionGroupId;
+    if (!user || groupId === null) {
+      return;
+    }
+
+    if (this.isProtectedAdminUser(user)) {
+      this.pushNotification('error', 'Operación no permitida', 'Las cuentas de administración protegidas no pueden ser modificadas.');
+      return;
+    }
+
+    const email = user.email.toLowerCase();
+    const groupKey = String(groupId);
+    const currentGroupMap = this.permissionsByUserAndGroup[email] ?? {};
+    this.permissionsByUserAndGroup[email] = {
+      ...currentGroupMap,
+      [groupKey]: [...this.allPermissions]
+    };
+
+    this.persistGroupScopedPermissions();
+    this.pushNotification('success', 'Operación completada', `Todos los permisos se asignaron en ${this.selectedPermissionGroupName}.`);
+  }
+
+  async removeAllPermissionsFromSelectedGroup(): Promise<void> {
+    if (!this.canManagePermissions) {
+      return;
+    }
+
+    const user = this.selectedPermissionUser;
+    const groupId = this.selectedPermissionGroupId;
+    if (!user || groupId === null) {
+      return;
+    }
+
+    if (this.isProtectedAdminUser(user)) {
+      this.pushNotification('error', 'Operación no permitida', 'Las cuentas de administración protegidas no pueden ser modificadas.');
+      return;
+    }
+
+    const email = user.email.toLowerCase();
+    const groupKey = String(groupId);
+    const currentGroupMap = this.permissionsByUserAndGroup[email] ?? {};
+    this.permissionsByUserAndGroup[email] = {
+      ...currentGroupMap,
+      [groupKey]: []
+    };
+
+    this.persistGroupScopedPermissions();
+    this.pushNotification('success', 'Operación completada', `Se removieron permisos por grupo en ${this.selectedPermissionGroupName}.`);
   }
 
   async addAllPermissionsToSelected(): Promise<void> {
@@ -664,6 +799,7 @@ export class UserComponent implements OnInit {
     try {
       const saved = await this.workboardApi.setUserPermissions(this.selectedPermissionUser.id, [...this.allPermissions]);
       this.permissionsByUser[email] = saved.filter((item): item is UserPermission => this.allPermissions.includes(item as UserPermission));
+      await this.refreshUsersAndPermissions();
     } catch (error) {
       this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible asignar permisos.');
       return;
@@ -684,6 +820,7 @@ export class UserComponent implements OnInit {
     try {
       await this.workboardApi.setUserPermissions(user.id, []);
       this.permissionsByUser[email] = [];
+      await this.refreshUsersAndPermissions();
     } catch (error) {
       this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible remover permisos.');
       return;
@@ -735,6 +872,7 @@ export class UserComponent implements OnInit {
 
   private pushNotification(severity: 'success' | 'error', summary: string, detail: string): void {
     this.notification = { severity, text: `${summary}: ${detail}` };
+    this.cdr.markForCheck();
   }
 
   private syncContextFromRoute(): void {
@@ -764,6 +902,7 @@ export class UserComponent implements OnInit {
     try {
       const apiUsers = await this.workboardApi.listUsers();
       this.users = apiUsers.map((user) => this.mapApiUserToView(user));
+      this.cdr.markForCheck();
     } catch (error) {
       this.users = [];
       this.pushNotification('error', 'Carga fallida', error instanceof Error ? error.message : 'No fue posible cargar usuarios desde el backend.');
@@ -803,10 +942,80 @@ export class UserComponent implements OnInit {
         this.permissionsByUser[user.email.toLowerCase()] = permissions
           .filter((item): item is UserPermission => this.allPermissions.includes(item as UserPermission));
       }));
+      this.cdr.markForCheck();
     } catch (error) {
       this.permissionsByUser = {};
       this.pushNotification('error', 'Carga fallida', error instanceof Error ? error.message : 'No fue posible cargar permisos desde el backend.');
     }
+  }
+
+  private async refreshUsersAndPermissions(): Promise<void> {
+    const previousSelectedUserId = this.selectedPermissionUserId;
+    await this.loadUsers();
+    await this.loadPermissions();
+
+    if (previousSelectedUserId !== null && this.users.some((user) => user.id === previousSelectedUserId)) {
+      this.selectedPermissionUserId = previousSelectedUserId;
+    } else {
+      this.selectedPermissionUserId = this.users[0]?.id ?? null;
+    }
+
+    if (this.selectedPermissionGroupId === null || !this.permissionGroups.some((group) => group.id === this.selectedPermissionGroupId)) {
+      this.selectedPermissionGroupId = this.permissionGroups[0]?.id ?? null;
+    }
+
+    this.ensureCurrentProfile();
+    this.cdr.markForCheck();
+  }
+
+  private async loadPermissionGroups(): Promise<void> {
+    try {
+      const groups = await this.workboardApi.listGroups();
+      this.permissionGroups = groups
+        .filter((group) => typeof group.id === 'number' && typeof group.name === 'string')
+        .map((group) => ({ id: group.id, name: group.name }))
+        .sort((left, right) => left.id - right.id);
+    } catch {
+      this.permissionGroups = [];
+    }
+  }
+
+  private loadGroupScopedPermissions(): void {
+    const raw = this.storage.getJson<Record<string, unknown>>(this.groupPermissionStorageKey);
+    if (!raw || typeof raw !== 'object') {
+      this.permissionsByUserAndGroup = {};
+      return;
+    }
+
+    const normalized: GroupScopedPermissionMap = {};
+    for (const [email, groupMap] of Object.entries(raw)) {
+      if (!groupMap || typeof groupMap !== 'object' || Array.isArray(groupMap)) {
+        normalized[email.toLowerCase()] = {};
+        continue;
+      }
+
+      const perGroup: Record<string, UserPermission[]> = {};
+      for (const [groupId, permissions] of Object.entries(groupMap as Record<string, unknown>)) {
+        if (!Array.isArray(permissions)) {
+          perGroup[groupId] = [];
+          continue;
+        }
+
+        perGroup[groupId] = [...new Set(
+          permissions
+            .filter((item): item is string => typeof item === 'string')
+            .flatMap((item) => this.migrateLegacyPermission(item))
+        )];
+      }
+
+      normalized[email.toLowerCase()] = perGroup;
+    }
+
+    this.permissionsByUserAndGroup = normalized;
+  }
+
+  private persistGroupScopedPermissions(): void {
+    this.storage.setJson(this.groupPermissionStorageKey, this.permissionsByUserAndGroup);
   }
 
   private ensurePermissionsForUsers(): void {
@@ -837,8 +1046,10 @@ export class UserComponent implements OnInit {
         comments: [],
         history: []
       }));
+      this.cdr.markForCheck();
     } catch {
       this.tickets = [];
+      this.cdr.markForCheck();
     }
   }
 

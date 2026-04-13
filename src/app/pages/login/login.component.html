@@ -1,4 +1,12 @@
-<app-auth-shell title="Login" subtitle="Inicio de sesión" heroAltText="Login" cardWidth="42rem" contentWidth="560px" heroHeight="250px">
+<app-auth-shell
+  title="Login"
+  subtitle="Inicio de sesión"
+  heroAltText="Login"
+  cardWidth="42rem"
+  contentWidth="560px"
+  heroHeight="250px"
+  (heroImageClick)="onHeroLogoClick()"
+>
   <article auth-body class="content-wrap">
     <p-inputgroup>
       <p-inputgroup-addon>

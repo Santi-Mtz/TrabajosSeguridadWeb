@@ -4,6 +4,8 @@ import { ButtonModule } from 'primeng/button';
 import { DrawerModule } from 'primeng/drawer';
 import { AuthSessionService } from './services/auth-session.service';
 import { AuthorizationService } from './services/authorization.service';
+import { StorageService } from './services/storage.service';
+import { environment } from '../environments/environment';
 
 @Component({
   selector: 'app-root',
@@ -12,10 +14,13 @@ import { AuthorizationService } from './services/authorization.service';
   styleUrl: './app.css'
 })
 export class App {
+  private readonly authTokenStorageKey = 'auth.token';
+
   constructor(
     public router: Router,
     private readonly authSession: AuthSessionService,
-    private readonly authorization: AuthorizationService
+    private readonly authorization: AuthorizationService,
+    private readonly storage: StorageService
   ) {}
 
   projectName = 'Practica 2';
@@ -55,8 +60,21 @@ export class App {
     return this.router.url.startsWith(path);
   }
 
-  logout(): void {
+  async logout(): Promise<void> {
+    try {
+      await fetch(`${environment.apiGatewayUrl}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json'
+        }
+      });
+    } catch {
+      // The local session is still cleared below if the gateway is unavailable.
+    }
+
     this.authSession.clearCurrentUser();
+    this.storage.removeItem(this.authTokenStorageKey);
     this.mobileMenuOpen = false;
     void this.router.navigate(['/login']);
   }

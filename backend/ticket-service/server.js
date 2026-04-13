@@ -10,6 +10,54 @@ const app = fastify({ logger: true });
 const dbService = new DatabaseService();
 const ticketService = new TicketService(dbService);
 
+app.addHook('onRequest', async (request) => {
+  request.startTimeMs = process.hrtime.bigint();
+});
+
+app.addHook('onResponse', async (request, reply) => {
+  const start = request.startTimeMs;
+  const elapsedMs = typeof start === 'bigint'
+    ? Number((process.hrtime.bigint() - start) / BigInt(1000000))
+    : 0;
+
+  const endpoint = request.routeOptions?.url || request.url;
+  const method = request.method;
+  const statusCode = reply.statusCode;
+  const ipAddress = request.headers['x-forwarded-for'] || request.ip;
+  const parsedUserId = Number(request.headers['x-user-id'] || 0);
+  const userId = Number.isInteger(parsedUserId) && parsedUserId > 0 ? parsedUserId : null;
+  const errorMessage = statusCode >= 500 ? `HTTP_${statusCode}` : null;
+
+  try {
+    await dbService.query(
+      `INSERT INTO microservice_request_logs
+        (service_name, endpoint, method, user_id, ip_address, status_code, int_op_code, response_time_ms, error_message)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      ['ticket-service', endpoint, method, userId, ipAddress, statusCode, null, elapsedMs, errorMessage]
+    );
+
+    await dbService.query(
+      `INSERT INTO microservice_endpoint_metrics
+        (service_name, endpoint, method, request_count, total_response_time_ms, avg_response_time_ms, updated_at)
+       VALUES ($1, $2, $3, 1, $4::bigint, $5::numeric, NOW())
+       ON CONFLICT (service_name, endpoint, method)
+       DO UPDATE SET
+         request_count = microservice_endpoint_metrics.request_count + 1,
+         total_response_time_ms = microservice_endpoint_metrics.total_response_time_ms + EXCLUDED.total_response_time_ms,
+         avg_response_time_ms =
+           ROUND(
+             (microservice_endpoint_metrics.total_response_time_ms + EXCLUDED.total_response_time_ms)::numeric
+             / (microservice_endpoint_metrics.request_count + 1),
+             2
+           ),
+         updated_at = NOW()`,
+      ['ticket-service', endpoint, method, elapsedMs, elapsedMs]
+    );
+  } catch (error) {
+    app.log.warn(error, 'No se pudieron persistir logs/metricas en ticket-service.');
+  }
+});
+
 app.register(cors, {
   origin: '*',
   credentials: true,
@@ -97,6 +145,7 @@ app.get('/groups/:groupId/tickets', async (request, reply) => {
 
 const start = async () => {
   try {
+    await dbService.ensureObservabilitySchema();
     const PORT = process.env.TICKET_SERVICE_PORT || 3002;
     await app.listen({ port: PORT, host: '0.0.0.0' });
     console.log(`Ticket service running on port ${PORT}`);

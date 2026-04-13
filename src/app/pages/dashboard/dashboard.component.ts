@@ -12,6 +12,7 @@ import { AuthorizationService } from '../../services/authorization.service';
 import { WorkboardApiService } from '../../services/workboard-api.service';
 
 type TicketStatus = 'Pendiente' | 'En progreso' | 'Revisión' | 'Bloqueado' | 'Hecho';
+type TicketPriority = 'Baja' | 'Media' | 'Alta';
 
 type TicketRecord = {
   id: number;
@@ -20,7 +21,7 @@ type TicketRecord = {
   description: string;
   status: TicketStatus;
   assignedTo: string;
-  priority: 'Baja' | 'Media' | 'Alta';
+  priority: TicketPriority;
   createdAt: string;
   dueDate: string;
   comments: string[];
@@ -30,6 +31,18 @@ type TicketRecord = {
 type GroupOption = {
   id: number;
   name: string;
+};
+
+type GroupComparisonRow = {
+  id: number;
+  name: string;
+  total: number;
+  pending: number;
+  inProgress: number;
+  review: number;
+  blocked: number;
+  done: number;
+  highPriority: number;
 };
 
 @Component({
@@ -50,6 +63,7 @@ export class DashboardComponent implements OnInit {
   ) {}
 
   readonly statuses: TicketStatus[] = ['Pendiente', 'En progreso', 'Revisión', 'Bloqueado', 'Hecho'];
+  readonly priorities: TicketPriority[] = ['Baja', 'Media', 'Alta'];
 
   readonly defaultGroups: GroupOption[] = [
     { id: 1, name: 'Blue Team' },
@@ -150,10 +164,76 @@ export class DashboardComponent implements OnInit {
     return this.tickets.filter((t) => t.groupId === groupId && t.status === status).length;
   }
 
+  ticketCountByPriority(groupId: number, priority: TicketPriority): number {
+    return this.tickets.filter((t) => t.groupId === groupId && t.priority === priority).length;
+  }
+
+  get groupComparisonSummary(): GroupComparisonRow[] {
+    return this.groups.map((group) => ({
+      id: group.id,
+      name: group.name,
+      total: this.ticketsForGroup(group.id).length,
+      pending: this.ticketCountByStatus(group.id, 'Pendiente'),
+      inProgress: this.ticketCountByStatus(group.id, 'En progreso'),
+      review: this.ticketCountByStatus(group.id, 'Revisión'),
+      blocked: this.ticketCountByStatus(group.id, 'Bloqueado'),
+      done: this.ticketCountByStatus(group.id, 'Hecho'),
+      highPriority: this.ticketCountByPriority(group.id, 'Alta')
+    }));
+  }
+
   get statusSummary(): Array<{ status: TicketStatus; total: number }> {
     return this.statuses.map((status) => ({
       status,
       total: this.tickets.filter((ticket) => ticket.status === status).length
+    }));
+  }
+
+  get prioritySummary(): Array<{ priority: TicketPriority; total: number }> {
+    return this.priorities.map((priority) => ({
+      priority,
+      total: this.tickets.filter((ticket) => ticket.priority === priority).length
+    }));
+  }
+
+  get ticketsByGroupSummary(): Array<{ groupId: number; groupName: string; total: number; percent: number }> {
+    const rows = this.groups.map((group) => ({
+      groupId: group.id,
+      groupName: group.name,
+      total: this.ticketsForGroup(group.id).length
+    }));
+
+    const max = rows.reduce((current, row) => Math.max(current, row.total), 0);
+    return rows.map((row) => ({
+      ...row,
+      percent: max > 0 ? Math.round((row.total / max) * 100) : 0
+    }));
+  }
+
+  get statusVisualSummary(): Array<{ label: string; total: number; percent: number; severity: 'info' | 'warn' | 'success' | 'secondary' }> {
+    const rows = this.statusSummary.map((entry) => ({
+      label: entry.status,
+      total: entry.total,
+      severity: this.statusSeverity(entry.status)
+    }));
+
+    const max = rows.reduce((current, row) => Math.max(current, row.total), 0);
+    return rows.map((row) => ({
+      ...row,
+      percent: max > 0 ? Math.round((row.total / max) * 100) : 0
+    }));
+  }
+
+  get priorityVisualSummary(): Array<{ label: TicketPriority; total: number; percent: number }> {
+    const rows = this.prioritySummary.map((entry) => ({
+      label: entry.priority,
+      total: entry.total
+    }));
+
+    const max = rows.reduce((current, row) => Math.max(current, row.total), 0);
+    return rows.map((row) => ({
+      ...row,
+      percent: max > 0 ? Math.round((row.total / max) * 100) : 0
     }));
   }
 
@@ -224,6 +304,10 @@ export class DashboardComponent implements OnInit {
     }
 
     void this.router.navigate(['/group'], { queryParams: { groupId, createTicket: 1 } });
+  }
+
+  openGroupKanban(groupId: number): void {
+    this.goToGroupView(groupId);
   }
 
   statusSeverity(status: TicketStatus): 'info' | 'warn' | 'success' | 'secondary' {

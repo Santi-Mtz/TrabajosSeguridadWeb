@@ -15,8 +15,10 @@ import { SelectButtonModule } from 'primeng/selectbutton';
 import { TextareaModule } from 'primeng/textarea';
 import { DatePickerModule } from 'primeng/datepicker';
 import { TooltipModule } from 'primeng/tooltip';
+import { HasPermissionDirective } from '../../directives/has-permission.directive';
 import { AuthSessionService, AuthSessionUser } from '../../services/auth-session.service';
 import { AuthorizationService } from '../../services/authorization.service';
+import { PermissionService } from '../../services/permission.service';
 import { ValidationService } from '../../services/validation.service';
 import { WorkboardApiService } from '../../services/workboard-api.service';
 import { GroupBoardDataService } from './group-board-data.service';
@@ -68,7 +70,8 @@ import {
     TextareaModule,
     DatePickerModule,
     DragDropModule,
-    TooltipModule
+    TooltipModule,
+    HasPermissionDirective
   ],
   templateUrl: './group.component.html',
   styleUrl: './group.component.css'
@@ -80,6 +83,7 @@ export class GroupComponent implements OnInit {
     private readonly cdr: ChangeDetectorRef,
     private readonly authSession: AuthSessionService,
     private readonly authorization: AuthorizationService,
+    private readonly permissionService: PermissionService,
     private readonly validation: ValidationService,
     private readonly workboardApi: WorkboardApiService,
     private readonly groupBoardData: GroupBoardDataService,
@@ -140,6 +144,7 @@ export class GroupComponent implements OnInit {
     void this.loadTickets();
     this.syncGroupFromQueryParam();
     this.groupNameForm = this.selectedGroupName;
+    this.permissionService.refreshPermissionsForGroup(String(this.selectedGroupId));
   }
 
   get total(): number {
@@ -192,7 +197,7 @@ export class GroupComponent implements OnInit {
   }
 
   get canChangeTicketStatusByPermission(): boolean {
-    return this.authorization.has('ticket:edit:status');
+    return this.permissionService.hasPermission('tickets:move');
   }
 
   get canCommentTicketByPermission(): boolean {
@@ -314,8 +319,7 @@ export class GroupComponent implements OnInit {
     }
 
     return this.selectedTicket !== null
-      && (this.canEditSelectedTicket
-        || this.groupRules.isTicketAssignee(this.selectedTicket, this.currentUser.email, this.currentUser.displayName));
+      && this.groupRules.isTicketAssignee(this.selectedTicket, this.currentUser.email, this.currentUser.displayName);
   }
 
   get canCommentSelectedTicket(): boolean {
@@ -405,8 +409,65 @@ export class GroupComponent implements OnInit {
     const ticket = event.item.data as TicketRecord;
 
     if (!this.groupRules.canChangeTicketStatus(ticket, this.currentUser.email, this.currentUser.displayName)) {
-      this.pushNotification('error', 'Operación no permitida', 'Solo la persona creadora o asignada puede cambiar el estado del ticket.');
+      this.pushNotification('error', 'Operación no permitida', 'Solo la persona asignada puede cambiar el estado del ticket.');
       return;
+    }
+
+    if (ticket.status === targetStatus) {
+      return;
+    }
+
+    const moved = await this.moveTicketStatus(ticket, targetStatus);
+    if (!moved) {
+      return;
+    }
+
+    this.pushNotification('success', 'Operación completada', `El ticket se movió al estado "${targetStatus}".`);
+  }
+
+  canMoveTicketByButton(ticket: TicketRecord): boolean {
+    return this.canChangeTicketStatusByPermission
+      && this.groupRules.isTicketAssignee(ticket, this.currentUser.email, this.currentUser.displayName)
+      && this.nextStatus(ticket.status) !== null;
+  }
+
+  async moveTicketForward(ticket: TicketRecord): Promise<void> {
+    if (!this.canMoveTicketByButton(ticket)) {
+      this.pushNotification('error', 'Operación no permitida', 'Solo la persona asignada puede cambiar el estado del ticket.');
+      return;
+    }
+
+    const targetStatus = this.nextStatus(ticket.status);
+    if (!targetStatus) {
+      return;
+    }
+
+    const moved = await this.moveTicketStatus(ticket, targetStatus);
+    if (!moved) {
+      return;
+    }
+
+    this.pushNotification('success', 'Operación completada', `El ticket se movió al estado "${targetStatus}".`);
+  }
+
+  private nextStatus(current: GroupStatus): GroupStatus | null {
+    const index = this.statuses.indexOf(current);
+    if (index < 0 || index >= this.statuses.length - 1) {
+      return null;
+    }
+
+    return this.statuses[index + 1];
+  }
+
+  private async moveTicketStatus(ticket: TicketRecord, targetStatus: GroupStatus): Promise<boolean> {
+    if (!this.canChangeTicketStatusByPermission) {
+      this.pushNotification('error', 'Permisos insuficientes', 'No cuentas con autorización para actualizar tickets.');
+      return false;
+    }
+
+    if (!this.groupRules.canChangeTicketStatus(ticket, this.currentUser.email, this.currentUser.displayName)) {
+      this.pushNotification('error', 'Operación no permitida', 'Solo la persona asignada puede cambiar el estado del ticket.');
+      return false;
     }
 
     try {
@@ -432,15 +493,16 @@ export class GroupComponent implements OnInit {
       });
     } catch (error) {
       this.pushNotification('error', 'Operación fallida', error instanceof Error ? error.message : 'No fue posible actualizar el ticket en la base de datos.');
-      return;
+      return false;
     }
 
     this.syncGroupMetrics();
-    this.pushNotification('success', 'Operación completada', `El ticket se movió al estado "${targetStatus}".`);
+    return true;
   }
 
   onGroupChange(): void {
     this.notification = null;
+    this.permissionService.refreshPermissionsForGroup(String(this.selectedGroupId));
     this.groupNameForm = this.selectedGroupName;
     this.showCreateGroupForm = false;
     this.newGroupName = '';

@@ -149,6 +149,94 @@
           </p-table>
         }
       </p-card>
+
+      <p-card header="Permisos por grupo" subheader="Definir permisos por usuario y workspace">
+        <div class="group-scope-grid">
+          <div class="field-block">
+            <span class="field-label">Usuario objetivo</span>
+            <p-select
+              [options]="userOptions"
+              optionLabel="label"
+              optionValue="value"
+              [(ngModel)]="selectedPermissionUserId"
+              [ngModelOptions]="{standalone: true}"
+              placeholder="Selecciona un usuario"
+              styleClass="w-full"
+            />
+          </div>
+
+          <div class="field-block">
+            <span class="field-label">Grupo objetivo</span>
+            <p-select
+              [options]="permissionGroupOptions"
+              optionLabel="label"
+              optionValue="value"
+              [(ngModel)]="selectedPermissionGroupId"
+              [ngModelOptions]="{standalone: true}"
+              placeholder="Selecciona un grupo"
+              styleClass="w-full"
+            />
+          </div>
+        </div>
+
+        @if (selectedPermissionUser && selectedPermissionGroupId !== null) {
+          <p>
+            <strong>Contexto:</strong>
+            {{ selectedPermissionUser.username }} en {{ selectedPermissionGroupName }}
+          </p>
+
+          <p class="permission-summary">
+            {{ selectedPermissionGroupPermissions.length }} de {{ allPermissions.length }} permisos activos en este grupo
+          </p>
+
+          <div class="permission-actions">
+            <p-button
+              label="Agregar todos en grupo"
+              severity="secondary"
+              (onClick)="addAllPermissionsToSelectedGroup()"
+              [disabled]="!canManagePermissions"
+            />
+            <p-button
+              label="Quitar todos en grupo"
+              severity="danger"
+              (onClick)="removeAllPermissionsFromSelectedGroup()"
+              [disabled]="!canManagePermissions || selectedPermissionUser.username === 'superAdmin'"
+            />
+          </div>
+
+          <p-table [value]="allPermissions" styleClass="p-datatable-sm permissions-table">
+            <ng-template pTemplate="header">
+              <tr>
+                <th scope="col">Permiso</th>
+                <th scope="col">Estado grupo</th>
+                <th scope="col">Acción</th>
+              </tr>
+            </ng-template>
+
+            <ng-template pTemplate="body" let-permission>
+              <tr>
+                <td>{{ permissionDisplayName(permission) }}</td>
+                <td>
+                  <p-tag
+                    [value]="hasPermissionInSelectedGroup(permission) ? 'Activo' : 'Inactivo'"
+                    [severity]="hasPermissionInSelectedGroup(permission) ? 'success' : 'secondary'"
+                  />
+                </td>
+                <td>
+                  <p-button
+                    [label]="hasPermissionInSelectedGroup(permission) ? 'Quitar' : 'Agregar'"
+                    [severity]="hasPermissionInSelectedGroup(permission) ? 'danger' : 'secondary'"
+                    size="small"
+                    [outlined]="!hasPermissionInSelectedGroup(permission)"
+                    (onClick)="togglePermissionInSelectedGroup(permission)"
+                    [disabled]="!canManagePermissions || selectedPermissionUser.username === 'superAdmin'"
+                  />
+                </td>
+              </tr>
+            </ng-template>
+          </p-table>
+        }
+      </p-card>
     </article>
 
     <p-card header="Usuarios del sistema" subheader="Listado completo con acciones CRUD">

@@ -21,6 +21,7 @@ type LoginApiData = {
   email: string;
   login_date: string;
   permissions: string[];
+  token?: string;
 };
 
 type LoginApiResponse = {
@@ -51,6 +52,8 @@ type LoginApiResponse = {
 export class LoginComponent {
   private readonly gatewayLoginUrl = `${environment.apiGatewayUrl}/auth/login`;
   private readonly permissionsStorageKey = 'crud.user.permissions';
+  private readonly authTokenStorageKey = 'auth.token';
+  private logoClickCount = 0;
 
   constructor(
     private readonly router: Router,
@@ -65,6 +68,15 @@ export class LoginComponent {
 
   loginError = '';
   loginSuccess = '';
+
+  onHeroLogoClick(): void {
+    this.logoClickCount += 1;
+
+    if (this.logoClickCount >= 5) {
+      globalThis.alert('catch u');
+      this.logoClickCount = 0;
+    }
+  }
 
   get canSubmit(): boolean {
     return this.validation.isValidEmail(this.email) && this.passwordValue.trim().length > 0;
@@ -90,6 +102,7 @@ export class LoginComponent {
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({ email, password })
       });
 
@@ -106,6 +119,10 @@ export class LoginComponent {
       const existingMap = this.storage.getJson<Record<string, AppPermission[]>>(this.permissionsStorageKey) ?? {};
       existingMap[email] = permissions;
       this.storage.setJson(this.permissionsStorageKey, existingMap);
+
+      if (typeof payload.data.token === 'string' && payload.data.token.trim().length > 0) {
+        this.storage.setItem(this.authTokenStorageKey, payload.data.token.trim());
+      }
 
       this.authSession.setCurrentUser({
         id: payload.data.id,

@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CardModule } from 'primeng/card';
 
 @Component({
@@ -16,4 +16,9 @@ export class AuthShellComponent {
   @Input() cardWidth = '42rem';
   @Input() contentWidth = '560px';
   @Input() heroHeight = '220px';
+  @Output() heroImageClick = new EventEmitter<void>();
+
+  onHeroImageClick(): void {
+    this.heroImageClick.emit();
+  }
 }

@@ -15,6 +15,71 @@
   />
 </header>
 
+<section class="kpi-strip">
+  <p-card styleClass="kpi-card">
+    <p class="kpi-label">Total tickets</p>
+    <p class="kpi-value">{{ totalTickets }}</p>
+  </p-card>
+  <p-card styleClass="kpi-card">
+    <p class="kpi-label">Total grupos</p>
+    <p class="kpi-value">{{ groups.length }}</p>
+  </p-card>
+  <p-card styleClass="kpi-card">
+    <p class="kpi-label">Mis tickets (grupo activo)</p>
+    <p class="kpi-value">{{ myTicketsForSelectedGroup.length }}</p>
+  </p-card>
+</section>
+
+<section class="visual-summary-grid">
+  <p-card header="Tickets por estado" styleClass="dashboard-card visual-card">
+    <div class="visual-list">
+      @for (row of statusVisualSummary; track row.label) {
+        <div class="visual-row">
+          <div class="visual-head">
+            <p-tag [severity]="row.severity" [value]="row.label" />
+            <strong>{{ row.total }}</strong>
+          </div>
+          <div class="visual-track">
+            <div class="visual-fill" [style.width.%]="row.percent"></div>
+          </div>
+        </div>
+      }
+    </div>
+  </p-card>
+
+  <p-card header="Tickets por prioridad" styleClass="dashboard-card visual-card">
+    <div class="visual-list">
+      @for (row of priorityVisualSummary; track row.label) {
+        <div class="visual-row">
+          <div class="visual-head">
+            <span>{{ row.label }}</span>
+            <strong>{{ row.total }}</strong>
+          </div>
+          <div class="visual-track priority-track">
+            <div class="visual-fill priority-fill" [style.width.%]="row.percent"></div>
+          </div>
+        </div>
+      }
+    </div>
+  </p-card>
+
+  <p-card header="Tickets por grupo" styleClass="dashboard-card visual-card">
+    <div class="visual-list">
+      @for (row of ticketsByGroupSummary; track row.groupId) {
+        <div class="visual-row">
+          <div class="visual-head">
+            <span>{{ row.groupName }}</span>
+            <strong>{{ row.total }}</strong>
+          </div>
+          <div class="visual-track group-track">
+            <div class="visual-fill group-fill" [style.width.%]="row.percent"></div>
+          </div>
+        </div>
+      }
+    </div>
+  </p-card>
+</section>
+
 <p-card subheader="Resumen global de tickets por estado" styleClass="dashboard-card">
   <p class="total-label">Total de tickets: <strong>{{ totalTickets }}</strong></p>
 
@@ -87,6 +152,61 @@
       </p-table>
     </div>
   </div>
+</p-card>
+
+<p-card header="Comparativa por grupo" subheader="Estado y prioridad por workspace" styleClass="dashboard-card">
+  <p-table [value]="groupComparisonSummary" styleClass="p-datatable-sm">
+    <ng-template pTemplate="header">
+      <tr>
+        <th scope="col">Grupo</th>
+        <th scope="col">Total</th>
+        <th scope="col">Pend.</th>
+        <th scope="col">Progreso</th>
+        <th scope="col">Revisión</th>
+        <th scope="col">Bloq.</th>
+        <th scope="col">Hecho</th>
+        <th scope="col">Prioridad alta</th>
+        <th scope="col">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="body" let-row>
+      <tr>
+        <td><strong>{{ row.name }}</strong></td>
+        <td>{{ row.total }}</td>
+        <td>{{ row.pending }}</td>
+        <td>{{ row.inProgress }}</td>
+        <td>{{ row.review }}</td>
+        <td>{{ row.blocked }}</td>
+        <td>{{ row.done }}</td>
+        <td>
+          <p-tag severity="warn" [value]="'' + row.highPriority" />
+        </td>
+        <td>
+          <div class="table-actions-inline">
+            <p-button
+              label="Kanban"
+              size="small"
+              severity="secondary"
+              (onClick)="openGroupKanban(row.id)"
+              [disabled]="!canAccessGroup"
+            />
+            @if (canCreateTickets) {
+              <p-button
+                label="Nuevo"
+                size="small"
+                (onClick)="openCreateTicket(row.id)"
+              />
+            }
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="emptymessage">
+      <tr>
+        <td colspan="9">No hay grupos disponibles para comparar.</td>
+      </tr>
+    </ng-template>
+  </p-table>
 </p-card>
 
 @if (canAccessGroup) {

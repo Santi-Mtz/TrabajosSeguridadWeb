@@ -7,7 +7,8 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "test:integration": "node scripts/integration-tests.js"
+    "test:integration": "node scripts/integration-tests.js",
+    "test:smoke:gateway": "node scripts/gateway-smoke-tests.js"
   },
   "prettier": {
     "printWidth": 100,

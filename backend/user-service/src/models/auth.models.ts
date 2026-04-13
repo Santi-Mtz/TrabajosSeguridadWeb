@@ -9,6 +9,7 @@ export type LoginResponseData = {
   email: string;
   login_date: string;
   permissions: string[];
+  token?: string;
 };
 
 export type ApiResponse<T> = {

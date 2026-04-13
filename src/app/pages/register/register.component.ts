@@ -11,6 +11,14 @@ import { DatePickerModule } from 'primeng/datepicker';
 import { MessageModule } from 'primeng/message';
 import { AuthShellComponent } from '../../components/auth-shell/auth-shell.component';
 import { ValidationService } from '../../services/validation.service';
+import { environment } from '../../../environments/environment';
+
+type RegisterApiResponse = {
+  statusCode: number;
+  intOpCode: string;
+  message: string;
+  data: unknown;
+};
 
 @Component({
   selector: 'app-register',
@@ -32,7 +40,11 @@ import { ValidationService } from '../../services/validation.service';
   styleUrl: './register.component.css'
 })
 export class RegisterComponent {
-  constructor(private readonly validation: ValidationService) {}
+  constructor(
+    private readonly validation: ValidationService
+  ) {}
+
+  private readonly gatewayRegisterUrl = `${environment.apiGatewayUrl}/auth/register`;
 
   username = '';
   fullName = '';
@@ -44,7 +56,9 @@ export class RegisterComponent {
   confirmPassword = '';
 
   submitAttempted = false;
+  isSubmitting = false;
   successMessage = '';
+  errorMessage = '';
 
   readonly specialSymbolDescription = '! @ # $ % ^ & * ( ) _ + - = { } ; : , . ?';
 
@@ -119,14 +133,49 @@ export class RegisterComponent {
     );
   }
 
-  onRegister(): void {
+  async onRegister(): Promise<void> {
     this.submitAttempted = true;
     this.successMessage = '';
+    this.errorMessage = '';
 
     if (!this.isFormValid) {
       return;
     }
 
-    this.successMessage = 'Registro completado correctamente. Tu cuenta fue creada con éxito.';
+    this.isSubmitting = true;
+    try {
+      const response = await fetch(this.gatewayRegisterUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+        username: this.username.trim(),
+        email: this.email.trim().toLowerCase(),
+        full_name: this.fullName.trim(),
+        address: this.address.trim(),
+        phone: this.phone.trim(),
+        birth_date: this.birthDateValue,
+        password: this.password
+        })
+      });
+
+      const payload = await response.json() as RegisterApiResponse;
+      if (!response.ok) {
+        throw new Error(payload.message || 'No fue posible registrar la cuenta.');
+      }
+
+      this.successMessage = 'Registro completado correctamente. Tu cuenta fue creada con éxito.';
+    } catch (error) {
+      const rawMessage = error instanceof Error ? error.message : 'No fue posible registrar la cuenta.';
+      if (rawMessage.toLowerCase().includes('duplicate key value') || rawMessage.toLowerCase().includes('users_email_key')) {
+        this.errorMessage = 'Ese correo electrónico ya está registrado. Usa otro correo o inicia sesión.';
+      } else {
+        this.errorMessage = rawMessage;
+      }
+    } finally {
+      this.isSubmitting = false;
+    }
   }
 }

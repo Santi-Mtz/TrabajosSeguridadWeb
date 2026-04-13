@@ -1,0 +1,5 @@
+{$DOMAIN_NAME:localhost} {
+  encode gzip zstd
+  tls internal
+  reverse_proxy frontend:80
+}

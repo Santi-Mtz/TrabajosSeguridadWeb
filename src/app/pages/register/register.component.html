@@ -111,11 +111,15 @@
     </article>
 
     <footer class="submit-action">
-      <p-button label="Crear cuenta" (onClick)="onRegister()" />
+      <p-button label="Crear cuenta" [loading]="isSubmitting" [disabled]="isSubmitting" (onClick)="onRegister()" />
     </footer>
 
     @if (submitAttempted && !isFormValid) {
       <p-message severity="error" text="Revisa la información capturada y completa correctamente los campos requeridos para continuar." />
+    }
+
+    @if (errorMessage) {
+      <p-message severity="error" [text]="errorMessage" />
     }
 
     @if (successMessage) {

@@ -24,8 +24,7 @@ export class GroupRulesService {
   }
 
   canChangeTicketStatus(ticket: TicketRecord, currentEmail: string, currentDisplayName: string): boolean {
-    return this.isTicketCreator(ticket, currentEmail, currentDisplayName)
-      || this.isTicketAssignee(ticket, currentEmail, currentDisplayName);
+    return this.isTicketAssignee(ticket, currentEmail, currentDisplayName);
   }
 
   matchesQuickFilter(ticket: TicketRecord, quickFilter: QuickFilter, currentEmail: string, currentDisplayName: string): boolean {

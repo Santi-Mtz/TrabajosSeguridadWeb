@@ -21,6 +21,7 @@
   width: 100%;
   height: var(--auth-hero-height, 220px);
   object-fit: cover;
+  cursor: pointer;
 }
 
 .auth-title,

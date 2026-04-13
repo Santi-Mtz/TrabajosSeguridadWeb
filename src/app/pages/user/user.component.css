@@ -55,6 +55,12 @@
   gap: 0.5rem;
 }
 
+.group-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
 .permission-summary {
   margin: 0.25rem 0 0;
   color: var(--p-text-muted-color, #6b7280);
@@ -83,7 +89,8 @@
 @media (max-width: 900px) {
   .profile-layout,
   .summary-grid,
-  .admin-layout {
+  .admin-layout,
+  .group-scope-grid {
     grid-template-columns: 1fr;
   }
 

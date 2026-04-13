@@ -21,10 +21,36 @@ type UserRow = {
   team: string | null;
 };
 
+const REQUIRED_PERMISSIONS: Array<{ code: string; description: string }> = [
+  { code: 'ticket:add', description: 'Crear tickets' },
+  { code: 'ticket:view', description: 'Ver tickets' },
+  { code: 'ticket:edit', description: 'Editar ticket completo' },
+  { code: 'ticket:edit:status', description: 'Cambiar estado de ticket' },
+  { code: 'ticket:edit:comment', description: 'Comentar ticket' },
+  { code: 'ticket:edit:priority', description: 'Cambiar prioridad de ticket' },
+  { code: 'ticket:edit:deadline', description: 'Cambiar fecha limite de ticket' },
+  { code: 'ticket:edit:assign', description: 'Reasignar ticket' },
+  { code: 'ticket:delete', description: 'Eliminar tickets' },
+  { code: 'group:add', description: 'Crear grupos' },
+  { code: 'group:view', description: 'Ver grupos' },
+  { code: 'group:edit', description: 'Editar grupos' },
+  { code: 'group:remove', description: 'Eliminar grupos' },
+  { code: 'group:add:members', description: 'Agregar miembros a grupos' },
+  { code: 'group:remove:members', description: 'Remover miembros de grupos' },
+  { code: 'user:add', description: 'Crear usuarios' },
+  { code: 'user:view:all', description: 'Ver todos los usuarios' },
+  { code: 'user:edit', description: 'Editar usuarios' },
+  { code: 'user:remove', description: 'Eliminar usuarios' },
+  { code: 'user:edit:permissions', description: 'Administrar permisos de usuario' },
+  { code: 'user:deactivate', description: 'Desactivar usuarios' },
+  { code: 'user:activate', description: 'Activar usuarios' }
+];
+
 @Injectable()
 export class UsersService {
   private profileSchemaReady = false;
   private cryptoReady = false;
+  private permissionsCatalogReady = false;
 
   constructor(private readonly db: DatabaseService) {}
 
@@ -56,6 +82,30 @@ export class UsersService {
 
     await this.db.pool.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
     this.cryptoReady = true;
+  }
+
+  private async ensurePermissionsCatalog(): Promise<void> {
+    if (this.permissionsCatalogReady) {
+      return;
+    }
+
+    await this.db.pool.query(
+      `INSERT INTO permissions (code, description)
+       VALUES ($1, $2)
+       ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description`,
+      ['ticket:view', 'Ver tickets']
+    );
+
+    for (const permission of REQUIRED_PERMISSIONS) {
+      await this.db.pool.query(
+        `INSERT INTO permissions (code, description)
+         VALUES ($1, $2)
+         ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description`,
+        [permission.code, permission.description]
+      );
+    }
+
+    this.permissionsCatalogReady = true;
   }
 
   private mapUser(row: UserRow) {
@@ -407,6 +457,7 @@ export class UsersService {
     }
 
     try {
+      await this.ensurePermissionsCatalog();
       const exists = await this.db.pool.query('SELECT id FROM users WHERE id = $1', [userId]);
       if (exists.rowCount === 0) {
         return {
@@ -459,6 +510,7 @@ export class UsersService {
 
     const client = await this.db.pool.connect();
     try {
+      await this.ensurePermissionsCatalog();
       const exists = await client.query('SELECT id FROM users WHERE id = $1', [userId]);
       if (exists.rowCount === 0) {
         return {
@@ -467,6 +519,26 @@ export class UsersService {
           message: 'User not found.',
           data: []
         };
+      }
+
+      if (normalized.length > 0) {
+        const catalog = await client.query(
+          `SELECT code
+           FROM permissions
+           WHERE code = ANY($1::text[])`,
+          [normalized]
+        );
+
+        const available = new Set(catalog.rows.map((row) => String(row.code)));
+        const unknown = normalized.filter((code) => !available.has(code));
+        if (unknown.length > 0) {
+          return {
+            statusCode: 400,
+            intOpCode: 'USR_PERMS_UNKNOWN_CODES',
+            message: `Unknown permissions: ${unknown.join(', ')}`,
+            data: []
+          };
+        }
       }
 
       await client.query('BEGIN');

@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { environment } from '../../environments/environment';
+import { StorageService } from './storage.service';
 
 export type ApiGroupRecord = {
   id: number;
@@ -107,6 +108,10 @@ export class WorkboardApiService {
   private readonly userServiceUrl = `${environment.userServiceUrl}`;
   private readonly groupServiceUrl = `${environment.groupServiceUrl}`;
   private readonly ticketServiceUrl = `${environment.ticketServiceUrl}`;
+  private readonly requestTimeoutMs = 10000;
+  private readonly authTokenStorageKey = 'auth.token';
+
+  constructor(private readonly storage: StorageService) {}
 
   async listUsers(): Promise<ApiUserRecord[]> {
     const response = await this.request<ApiUserRecord[]>(`${this.userServiceUrl}/users`);
@@ -293,16 +298,41 @@ export class WorkboardApiService {
       headers.set('Accept', 'application/json');
     }
 
+    const token = this.storage.getItem(this.authTokenStorageKey);
+    if (token && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+
     if (init?.body !== undefined && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');
     }
 
-    const response = await fetch(url, {
-      ...init,
-      headers
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...init,
+        headers,
+        credentials: 'include',
+        signal: controller.signal
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error('La solicitud tardó demasiado en responder. Intenta nuevamente.');
+      }
+
+      throw new Error('No fue posible conectar con el servidor. Verifica que los servicios estén activos.');
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     const payload = await response.json() as ApiEnvelope<T>;
+
+    if (response.status === 401) {
+      this.storage.removeItem(this.authTokenStorageKey);
+    }
 
     if (!response.ok) {
       const message = typeof payload?.message === 'string' && payload.message.trim().length > 0
