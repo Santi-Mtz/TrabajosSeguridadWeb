@@ -25,7 +25,6 @@ export class App {
 
   projectName = 'Practica 2';
   appVersion = '1.6';
-  menuOpen = true;
   mobileMenuOpen = false;
 
   get showSidebar(): boolean {
@@ -35,10 +34,6 @@ export class App {
 
   get canOpenGroup(): boolean {
     return this.authorization.canAccessGroupSection();
-  }
-
-  toggleMenu(): void {
-    this.menuOpen = !this.menuOpen;
   }
 
   toggleMobileMenu(): void {

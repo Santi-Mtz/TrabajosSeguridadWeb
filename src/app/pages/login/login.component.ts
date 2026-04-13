@@ -53,7 +53,6 @@ export class LoginComponent {
   private readonly gatewayLoginUrl = `${environment.apiGatewayUrl}/auth/login`;
   private readonly permissionsStorageKey = 'crud.user.permissions';
   private readonly authTokenStorageKey = 'auth.token';
-  private logoClickCount = 0;
 
   constructor(
     private readonly router: Router,
@@ -68,15 +67,6 @@ export class LoginComponent {
 
   loginError = '';
   loginSuccess = '';
-
-  onHeroLogoClick(): void {
-    this.logoClickCount += 1;
-
-    if (this.logoClickCount >= 5) {
-      globalThis.alert('catch u');
-      this.logoClickCount = 0;
-    }
-  }
 
   get canSubmit(): boolean {
     return this.validation.isValidEmail(this.email) && this.passwordValue.trim().length > 0;

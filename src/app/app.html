@@ -1,13 +1,6 @@
 @if (showSidebar) {
-  <main class="dashboard" [class.sidebar-collapsed]="!menuOpen">
+  <main class="dashboard sidebar-collapsed">
     <aside class="sidebar sidebar-desktop" aria-label="Navegación principal">
-      <p-button
-        icon="pi pi-bars"
-        [text]="true"
-        ariaLabel="Expandir o colapsar menú"
-        (onClick)="toggleMenu()"
-      />
-
       <nav class="sidebar-nav" aria-label="Secciones">
         <p-button
           label="Dashboard"
